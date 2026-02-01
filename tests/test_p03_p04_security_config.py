@@ -81,6 +81,7 @@ def test_rate_limiting_forced_in_production():
     prod_settings = Settings(
         env=Environment.PRODUCTION,
         rate_limit_enabled=False,  # Try to disable
+        api_key="test-api-key",
         database_url="postgresql+asyncpg://test:test@localhost/test",
     )
     
@@ -91,6 +92,7 @@ def test_rate_limiting_forced_in_production():
     staging_settings = Settings(
         env=Environment.STAGING,
         rate_limit_enabled=False,  # Try to disable
+        api_key="test-api-key",
         database_url="postgresql+asyncpg://test:test@localhost/test",
     )
     
@@ -100,6 +102,7 @@ def test_rate_limiting_forced_in_production():
     dev_settings = Settings(
         env=Environment.DEVELOPMENT,
         rate_limit_enabled=False,
+        api_key="test-api-key",
         database_url="postgresql+asyncpg://test:test@localhost/test",
     )
     

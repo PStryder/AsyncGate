@@ -61,6 +61,13 @@ async def engine():
         engine, class_=AsyncSession, expire_on_commit=False
     )
 
+    try:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+    except Exception as exc:  # pragma: no cover - skips in environments without DB
+        await engine.dispose()
+        pytest.skip(f"AsyncGate test database unavailable: {exc}")
+
     yield engine
     await engine.dispose()
 

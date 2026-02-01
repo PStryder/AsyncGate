@@ -172,8 +172,8 @@ class Settings(BaseSettings):
     )
 
     # Security (v0 - simple shared token)
-    api_key: Optional[str] = None
     allow_insecure_dev: bool = Field(default=False, description="Allow unauthenticated in dev")
+    api_key: Optional[str] = None
     
     # CORS configuration (P0.3 - explicit allowlist)
     cors_allowed_origins: list[str] = Field(
