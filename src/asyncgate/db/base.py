@@ -29,6 +29,7 @@ engine = create_async_engine(
     pool_pre_ping=True,
     pool_size=20,
     max_overflow=10,
+    connect_args={"ssl": False},  # Disable SSL for Fly.io internal network
 )
 
 

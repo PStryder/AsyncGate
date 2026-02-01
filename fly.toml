@@ -38,22 +38,6 @@ kill_timeout = "30s"
   cpu_kind = "shared"
   cpus = 1
 
-[checks]
-  [checks.health]
-    grace_period = "10s"
-    interval = "30s"
-    method = "GET"
-    path = "/v1/health"
-    port = 8080
-    timeout = "5s"
-    type = "http"
-    [checks.health.headers]
-      X-Forwarded-Proto = "https"
-
-[metrics]
-  port = 9091
-  path = "/metrics"
-
 [[services]]
   protocol = "tcp"
   internal_port = 8080

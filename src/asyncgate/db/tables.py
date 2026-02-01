@@ -38,7 +38,7 @@ class TaskTable(Base):
 
     # Ownership (immutable)
     created_by_kind: Mapped[str] = mapped_column(
-        Enum(PrincipalKind), nullable=False
+        Enum(PrincipalKind, values_callable=lambda x: [e.value for e in x]), nullable=False
     )
     created_by_id: Mapped[str] = mapped_column(String(255), nullable=False)
     created_by_instance_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -56,7 +56,9 @@ class TaskTable(Base):
 
     # Status
     status: Mapped[TaskStatus] = mapped_column(
-        Enum(TaskStatus), nullable=False, default=TaskStatus.QUEUED
+        Enum(TaskStatus, values_callable=lambda x: [e.value for e in x]), 
+        nullable=False, 
+        default=TaskStatus.QUEUED
     )
 
     # Retry config
@@ -111,6 +113,7 @@ class TaskTable(Base):
         Index("idx_tasks_running", "tenant_id", "status", "started_at"),
         # Index for instance ownership
         Index("idx_tasks_instance", "asyncgate_instance"),
+        # Index for principal AI ownership queries
         Index("idx_tasks_principal_ai", "tenant_id", "principal_ai"),
     )
 
@@ -167,15 +170,24 @@ class ReceiptTable(Base):
     tenant_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True)
     receipt_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True)
 
-    receipt_type: Mapped[ReceiptType] = mapped_column(Enum(ReceiptType), nullable=False)
+    receipt_type: Mapped[ReceiptType] = mapped_column(
+        Enum(ReceiptType, values_callable=lambda x: [e.value for e in x]), 
+        nullable=False
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
     # Sender
-    from_kind: Mapped[str] = mapped_column(Enum(PrincipalKind), nullable=False)
+    from_kind: Mapped[str] = mapped_column(
+        Enum(PrincipalKind, values_callable=lambda x: [e.value for e in x]), 
+        nullable=False
+    )
     from_id: Mapped[str] = mapped_column(String(255), nullable=False)
 
     # Recipient
-    to_kind: Mapped[str] = mapped_column(Enum(PrincipalKind), nullable=False)
+    to_kind: Mapped[str] = mapped_column(
+        Enum(PrincipalKind, values_callable=lambda x: [e.value for e in x]), 
+        nullable=False
+    )
     to_id: Mapped[str] = mapped_column(String(255), nullable=False)
 
     # Related entities
@@ -262,7 +274,10 @@ class RelationshipTable(Base):
     __tablename__ = "relationships"
 
     tenant_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True)
-    principal_kind: Mapped[str] = mapped_column(Enum(PrincipalKind), primary_key=True)
+    principal_kind: Mapped[str] = mapped_column(
+        Enum(PrincipalKind, values_callable=lambda x: [e.value for e in x]), 
+        primary_key=True
+    )
     principal_id: Mapped[str] = mapped_column(String(255), primary_key=True)
     principal_instance_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

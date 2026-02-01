@@ -8,7 +8,7 @@ from typing import Optional
 from asyncgate.config import settings
 from asyncgate.db.base import get_session
 from asyncgate.engine import AsyncGateEngine
-from asyncgate.observability.trace import set_trace_id
+from asyncgate.observability.trace import ensure_trace_id
 
 logger = logging.getLogger("asyncgate.sweep")
 
@@ -39,7 +39,7 @@ async def lease_sweep_loop():
 
     while not _shutdown_event.is_set():
         try:
-            set_trace_id()
+            ensure_trace_id()
             async with get_session() as session:
                 engine = AsyncGateEngine(session)
                 expired_count = await engine.expire_leases(batch_size=20)

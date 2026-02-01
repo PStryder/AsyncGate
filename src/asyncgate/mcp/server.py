@@ -44,6 +44,219 @@ def _extract_principal_id(arguments: dict[str, Any]) -> str | None:
     return None
 
 
+TOOL_DEFS: list[dict[str, Any]] = [
+    {
+        "name": "asyncgate.bootstrap",
+        "description": "Establish session identity and list open obligations",
+        "inputSchema": _with_auth_schema({
+            "type": "object",
+            "properties": {
+                "agent_id": {"type": "string", "description": "Agent identifier"},
+                "agent_instance_id": {"type": "string", "description": "Optional session ID"},
+                "agent_version": {"type": "string", "description": "Agent version"},
+                "since_receipt_id": {"type": "string", "description": "Cursor for incremental fetch"},
+                "max_items": {"type": "integer", "description": "Max items to return"},
+                "tenant_id": {"type": "string", "description": "Tenant ID"},
+            },
+            "required": ["agent_id", "tenant_id"],
+        }),
+    },
+    {
+        "name": "asyncgate.create_task",
+        "description": "Create a new async task",
+        "inputSchema": _with_auth_schema({
+            "type": "object",
+            "properties": {
+                "type": {"type": "string", "description": "Task type"},
+                "payload": {"type": "object", "description": "Task payload"},
+                "payload_pointer": {"type": "string", "description": "Pointer to task payload"},
+                "principal_ai": {"type": "string", "description": "Principal AI that owns the obligation"},
+                "requirements": {"type": "object", "description": "Task requirements"},
+                "expected_outcome_kind": {"type": "string", "description": "Expected outcome kind"},
+                "expected_artifact_mime": {"type": "string", "description": "Expected artifact MIME"},
+                "priority": {"type": "integer", "description": "Priority (higher = urgent)"},
+                "idempotency_key": {"type": "string", "description": "Idempotency key"},
+                "max_attempts": {"type": "integer", "description": "Max retry attempts"},
+                "retry_backoff_seconds": {"type": "integer", "description": "Retry backoff"},
+                "delay_seconds": {"type": "integer", "description": "Delay before eligible"},
+                "agent_id": {"type": "string", "description": "Creating agent ID"},
+                "tenant_id": {"type": "string", "description": "Tenant ID"},
+            },
+            "required": ["type", "principal_ai", "agent_id", "tenant_id"],
+        }),
+    },
+    {
+        "name": "asyncgate.get_task",
+        "description": "Get a task by ID including result if terminal",
+        "inputSchema": _with_auth_schema({
+            "type": "object",
+            "properties": {
+                "task_id": {"type": "string", "description": "Task UUID"},
+                "tenant_id": {"type": "string", "description": "Tenant ID"},
+            },
+            "required": ["task_id", "tenant_id"],
+        }),
+    },
+    {
+        "name": "asyncgate.list_tasks",
+        "description": "List tasks with optional filtering",
+        "inputSchema": _with_auth_schema({
+            "type": "object",
+            "properties": {
+                "status": {"type": "string", "description": "Filter by status"},
+                "type": {"type": "string", "description": "Filter by type"},
+                "limit": {"type": "integer", "description": "Max results"},
+                "cursor": {"type": "string", "description": "Pagination cursor"},
+                "tenant_id": {"type": "string", "description": "Tenant ID"},
+            },
+            "required": ["tenant_id"],
+        }),
+    },
+    {
+        "name": "asyncgate.cancel_task",
+        "description": "Cancel a task",
+        "inputSchema": _with_auth_schema({
+            "type": "object",
+            "properties": {
+                "task_id": {"type": "string", "description": "Task UUID"},
+                "reason": {"type": "string", "description": "Cancellation reason"},
+                "agent_id": {"type": "string", "description": "Agent ID"},
+                "tenant_id": {"type": "string", "description": "Tenant ID"},
+            },
+            "required": ["task_id", "agent_id", "tenant_id"],
+        }),
+    },
+    {
+        "name": "asyncgate.list_receipts",
+        "description": "List receipts for a principal",
+        "inputSchema": _with_auth_schema({
+            "type": "object",
+            "properties": {
+                "to_kind": {"type": "string", "description": "Recipient kind"},
+                "to_id": {"type": "string", "description": "Recipient ID"},
+                "since_receipt_id": {"type": "string", "description": "Cursor"},
+                "limit": {"type": "integer", "description": "Max results"},
+                "tenant_id": {"type": "string", "description": "Tenant ID"},
+            },
+            "required": ["to_kind", "to_id", "tenant_id"],
+        }),
+    },
+    {
+        "name": "asyncgate.ack_receipt",
+        "description": "Acknowledge a receipt",
+        "inputSchema": _with_auth_schema({
+            "type": "object",
+            "properties": {
+                "receipt_id": {"type": "string", "description": "Receipt UUID"},
+                "agent_id": {"type": "string", "description": "Agent ID"},
+                "tenant_id": {"type": "string", "description": "Tenant ID"},
+            },
+            "required": ["receipt_id", "agent_id", "tenant_id"],
+        }),
+    },
+    {
+        "name": "asyncgate.check_terminator",
+        "description": "Check for termination evidence on a receipt",
+        "inputSchema": _with_auth_schema({
+            "type": "object",
+            "properties": {
+                "parent_receipt_id": {"type": "string", "description": "Parent receipt UUID"},
+                "tenant_id": {"type": "string", "description": "Tenant ID"},
+            },
+            "required": ["parent_receipt_id", "tenant_id"],
+        }),
+    },
+    {
+        "name": "asyncgate.lease_next",
+        "description": "Claim next available tasks matching capabilities",
+        "inputSchema": _with_auth_schema({
+            "type": "object",
+            "properties": {
+                "worker_id": {"type": "string", "description": "Worker identifier"},
+                "capabilities": {"type": "array", "items": {"type": "string"}, "description": "Worker capabilities"},
+                "accept_types": {"type": "array", "items": {"type": "string"}, "description": "Task types to accept"},
+                "max_tasks": {"type": "integer", "description": "Max tasks to claim"},
+                "lease_ttl_seconds": {"type": "integer", "description": "Lease TTL"},
+                "tenant_id": {"type": "string", "description": "Tenant ID"},
+            },
+            "required": ["worker_id", "tenant_id"],
+        }),
+    },
+    {
+        "name": "asyncgate.renew_lease",
+        "description": "Renew an active lease",
+        "inputSchema": _with_auth_schema({
+            "type": "object",
+            "properties": {
+                "worker_id": {"type": "string", "description": "Worker ID"},
+                "task_id": {"type": "string", "description": "Task UUID"},
+                "lease_id": {"type": "string", "description": "Lease UUID"},
+                "extend_by_seconds": {"type": "integer", "description": "Extension duration"},
+                "tenant_id": {"type": "string", "description": "Tenant ID"},
+            },
+            "required": ["worker_id", "task_id", "lease_id", "tenant_id"],
+        }),
+    },
+    {
+        "name": "asyncgate.report_progress",
+        "description": "Report task execution progress",
+        "inputSchema": _with_auth_schema({
+            "type": "object",
+            "properties": {
+                "worker_id": {"type": "string", "description": "Worker ID"},
+                "task_id": {"type": "string", "description": "Task UUID"},
+                "lease_id": {"type": "string", "description": "Lease UUID"},
+                "progress": {"type": "object", "description": "Progress data"},
+                "tenant_id": {"type": "string", "description": "Tenant ID"},
+            },
+            "required": ["worker_id", "task_id", "lease_id", "progress", "tenant_id"],
+        }),
+    },
+    {
+        "name": "asyncgate.complete",
+        "description": "Mark a task as successfully completed",
+        "inputSchema": _with_auth_schema({
+            "type": "object",
+            "properties": {
+                "worker_id": {"type": "string", "description": "Worker ID"},
+                "task_id": {"type": "string", "description": "Task UUID"},
+                "lease_id": {"type": "string", "description": "Lease UUID"},
+                "result": {"type": "object", "description": "Task result"},
+                "artifacts": {"type": "object", "description": "Result artifacts"},
+                "tenant_id": {"type": "string", "description": "Tenant ID"},
+            },
+            "required": ["worker_id", "task_id", "lease_id", "result", "tenant_id"],
+        }),
+    },
+    {
+        "name": "asyncgate.fail",
+        "description": "Mark a task as failed",
+        "inputSchema": _with_auth_schema({
+            "type": "object",
+            "properties": {
+                "worker_id": {"type": "string", "description": "Worker ID"},
+                "task_id": {"type": "string", "description": "Task UUID"},
+                "lease_id": {"type": "string", "description": "Lease UUID"},
+                "error": {"type": "object", "description": "Error details"},
+                "retryable": {"type": "boolean", "description": "Whether to retry"},
+                "tenant_id": {"type": "string", "description": "Tenant ID"},
+            },
+            "required": ["worker_id", "task_id", "lease_id", "error", "tenant_id"],
+        }),
+    },
+    {
+        "name": "asyncgate.health",
+        "description": "Health check / service info",
+        "inputSchema": _with_auth_schema({"type": "object", "properties": {}}),
+    },
+    {
+        "name": "asyncgate.get_config",
+        "description": "Get server configuration",
+        "inputSchema": _with_auth_schema({"type": "object", "properties": {}}),
+    },
+]
+
+
 def create_mcp_server() -> Server:
     """Create and configure MCP server."""
     server = Server("asyncgate")
@@ -56,214 +269,12 @@ def create_mcp_server() -> Server:
     async def list_tools() -> list[Tool]:
         """List available tools."""
         return [
-            # TASKER tools
             Tool(
-                name="asyncgate.bootstrap",
-                description="Establish session identity and get attention-aware status",
-                inputSchema=_with_auth_schema({
-                    "type": "object",
-                    "properties": {
-                        "agent_id": {"type": "string", "description": "Agent identifier"},
-                        "agent_instance_id": {"type": "string", "description": "Optional session ID"},
-                        "agent_version": {"type": "string", "description": "Agent version"},
-                        "since_receipt_id": {"type": "string", "description": "Cursor for incremental fetch"},
-                        "max_items": {"type": "integer", "description": "Max items to return"},
-                        "tenant_id": {"type": "string", "description": "Tenant ID"},
-                    },
-                    "required": ["agent_id", "tenant_id"],
-                }),
-            ),
-            Tool(
-                name="asyncgate.create_task",
-                description="Create a new async task",
-                inputSchema=_with_auth_schema({
-                    "type": "object",
-                    "properties": {
-                        "type": {"type": "string", "description": "Task type"},
-                        "payload": {"type": "object", "description": "Task payload"},
-                        "payload_pointer": {"type": "string", "description": "Pointer to task payload"},
-                        "principal_ai": {"type": "string", "description": "Principal AI that owns the obligation"},
-                        "requirements": {"type": "object", "description": "Task requirements"},
-                        "expected_outcome_kind": {"type": "string", "description": "Expected outcome kind"},
-                        "expected_artifact_mime": {"type": "string", "description": "Expected artifact MIME"},
-                        "priority": {"type": "integer", "description": "Priority (higher = urgent)"},
-                        "idempotency_key": {"type": "string", "description": "Idempotency key"},
-                        "max_attempts": {"type": "integer", "description": "Max retry attempts"},
-                        "retry_backoff_seconds": {"type": "integer", "description": "Retry backoff"},
-                        "delay_seconds": {"type": "integer", "description": "Delay before eligible"},
-                        "agent_id": {"type": "string", "description": "Creating agent ID"},
-                        "tenant_id": {"type": "string", "description": "Tenant ID"},
-                    },
-                    "required": ["type", "principal_ai", "agent_id", "tenant_id"],
-                }),
-            ),
-            Tool(
-                name="asyncgate.get_task",
-                description="Get a task by ID including result if terminal",
-                inputSchema=_with_auth_schema({
-                    "type": "object",
-                    "properties": {
-                        "task_id": {"type": "string", "description": "Task UUID"},
-                        "tenant_id": {"type": "string", "description": "Tenant ID"},
-                    },
-                    "required": ["task_id", "tenant_id"],
-                }),
-            ),
-            Tool(
-                name="asyncgate.list_tasks",
-                description="List tasks with optional filtering",
-                inputSchema=_with_auth_schema({
-                    "type": "object",
-                    "properties": {
-                        "status": {"type": "string", "description": "Filter by status"},
-                        "type": {"type": "string", "description": "Filter by type"},
-                        "limit": {"type": "integer", "description": "Max results"},
-                        "cursor": {"type": "string", "description": "Pagination cursor"},
-                        "tenant_id": {"type": "string", "description": "Tenant ID"},
-                    },
-                    "required": ["tenant_id"],
-                }),
-            ),
-            Tool(
-                name="asyncgate.cancel_task",
-                description="Cancel a task",
-                inputSchema=_with_auth_schema({
-                    "type": "object",
-                    "properties": {
-                        "task_id": {"type": "string", "description": "Task UUID"},
-                        "reason": {"type": "string", "description": "Cancellation reason"},
-                        "agent_id": {"type": "string", "description": "Agent ID"},
-                        "tenant_id": {"type": "string", "description": "Tenant ID"},
-                    },
-                    "required": ["task_id", "agent_id", "tenant_id"],
-                }),
-            ),
-            Tool(
-                name="asyncgate.list_receipts",
-                description="List receipts for a principal",
-                inputSchema=_with_auth_schema({
-                    "type": "object",
-                    "properties": {
-                        "to_kind": {"type": "string", "description": "Recipient kind"},
-                        "to_id": {"type": "string", "description": "Recipient ID"},
-                        "since_receipt_id": {"type": "string", "description": "Cursor"},
-                        "limit": {"type": "integer", "description": "Max results"},
-                        "tenant_id": {"type": "string", "description": "Tenant ID"},
-                    },
-                    "required": ["to_kind", "to_id", "tenant_id"],
-                }),
-            ),
-            Tool(
-                name="asyncgate.ack_receipt",
-                description="Acknowledge a receipt",
-                inputSchema=_with_auth_schema({
-                    "type": "object",
-                    "properties": {
-                        "receipt_id": {"type": "string", "description": "Receipt UUID"},
-                        "agent_id": {"type": "string", "description": "Agent ID"},
-                        "tenant_id": {"type": "string", "description": "Tenant ID"},
-                    },
-                    "required": ["receipt_id", "agent_id", "tenant_id"],
-                }),
-            ),
-            # TASKEE tools
-            Tool(
-                name="asyncgate.lease_next",
-                description="Claim next available tasks matching capabilities",
-                inputSchema=_with_auth_schema({
-                    "type": "object",
-                    "properties": {
-                        "worker_id": {"type": "string", "description": "Worker identifier"},
-                        "capabilities": {"type": "array", "items": {"type": "string"}, "description": "Worker capabilities"},
-                        "accept_types": {"type": "array", "items": {"type": "string"}, "description": "Task types to accept"},
-                        "max_tasks": {"type": "integer", "description": "Max tasks to claim"},
-                        "lease_ttl_seconds": {"type": "integer", "description": "Lease TTL"},
-                        "tenant_id": {"type": "string", "description": "Tenant ID"},
-                    },
-                    "required": ["worker_id", "tenant_id"],
-                }),
-            ),
-            Tool(
-                name="asyncgate.renew_lease",
-                description="Renew an active lease",
-                inputSchema=_with_auth_schema({
-                    "type": "object",
-                    "properties": {
-                        "worker_id": {"type": "string", "description": "Worker ID"},
-                        "task_id": {"type": "string", "description": "Task UUID"},
-                        "lease_id": {"type": "string", "description": "Lease UUID"},
-                        "extend_by_seconds": {"type": "integer", "description": "Extension duration"},
-                        "tenant_id": {"type": "string", "description": "Tenant ID"},
-                    },
-                    "required": ["worker_id", "task_id", "lease_id", "tenant_id"],
-                }),
-            ),
-            Tool(
-                name="asyncgate.report_progress",
-                description="Report task execution progress",
-                inputSchema=_with_auth_schema({
-                    "type": "object",
-                    "properties": {
-                        "worker_id": {"type": "string", "description": "Worker ID"},
-                        "task_id": {"type": "string", "description": "Task UUID"},
-                        "lease_id": {"type": "string", "description": "Lease UUID"},
-                        "progress": {"type": "object", "description": "Progress data"},
-                        "tenant_id": {"type": "string", "description": "Tenant ID"},
-                    },
-                    "required": ["worker_id", "task_id", "lease_id", "progress", "tenant_id"],
-                }),
-            ),
-            Tool(
-                name="asyncgate.start_task",
-                description="Mark a task as running",
-                inputSchema=_with_auth_schema({
-                    "type": "object",
-                    "properties": {
-                        "worker_id": {"type": "string", "description": "Worker ID"},
-                        "task_id": {"type": "string", "description": "Task UUID"},
-                        "lease_id": {"type": "string", "description": "Lease UUID"},
-                        "tenant_id": {"type": "string", "description": "Tenant ID"},
-                    },
-                    "required": ["worker_id", "task_id", "lease_id", "tenant_id"],
-                }),
-            ),
-            Tool(
-                name="asyncgate.complete",
-                description="Mark a task as successfully completed",
-                inputSchema=_with_auth_schema({
-                    "type": "object",
-                    "properties": {
-                        "worker_id": {"type": "string", "description": "Worker ID"},
-                        "task_id": {"type": "string", "description": "Task UUID"},
-                        "lease_id": {"type": "string", "description": "Lease UUID"},
-                        "result": {"type": "object", "description": "Task result"},
-                        "artifacts": {"type": "object", "description": "Result artifacts"},
-                        "tenant_id": {"type": "string", "description": "Tenant ID"},
-                    },
-                    "required": ["worker_id", "task_id", "lease_id", "result", "tenant_id"],
-                }),
-            ),
-            Tool(
-                name="asyncgate.fail",
-                description="Mark a task as failed",
-                inputSchema=_with_auth_schema({
-                    "type": "object",
-                    "properties": {
-                        "worker_id": {"type": "string", "description": "Worker ID"},
-                        "task_id": {"type": "string", "description": "Task UUID"},
-                        "lease_id": {"type": "string", "description": "Lease UUID"},
-                        "error": {"type": "object", "description": "Error details"},
-                        "retryable": {"type": "boolean", "description": "Whether to retry"},
-                        "tenant_id": {"type": "string", "description": "Tenant ID"},
-                    },
-                    "required": ["worker_id", "task_id", "lease_id", "error", "tenant_id"],
-                }),
-            ),
-            Tool(
-                name="asyncgate.get_config",
-                description="Get server configuration",
-                inputSchema=_with_auth_schema({"type": "object", "properties": {}}),
-            ),
+                name=tool["name"],
+                description=tool.get("description", ""),
+                inputSchema=tool.get("inputSchema") or {"type": "object", "properties": {}},
+            )
+            for tool in TOOL_DEFS
         ]
 
     # ========================================================================
@@ -308,12 +319,40 @@ async def _handle_tool(name: str, arguments: dict[str, Any]) -> Any:
                 id=arguments["agent_id"],
                 instance_id=arguments.get("agent_instance_id"),
             )
-            return await engine.bootstrap(
+            relationship = await engine.relationships.upsert(
+                tenant_id=UUID(arguments["tenant_id"]),
+                principal_kind=principal.kind,
+                principal_id=principal.id,
+                principal_instance_id=principal.instance_id,
+            )
+
+            obligations_data = await engine.list_open_obligations(
                 tenant_id=UUID(arguments["tenant_id"]),
                 principal=principal,
                 since_receipt_id=UUID(arguments["since_receipt_id"]) if arguments.get("since_receipt_id") else None,
-                max_items=arguments.get("max_items"),
+                limit=arguments.get("max_items"),
             )
+
+            from asyncgate.config import settings
+
+            return {
+                "server": {
+                    "name": "AsyncGate",
+                    "version": "0.1.0",
+                    "instance_id": settings.instance_id,
+                    "environment": settings.env.value,
+                },
+                "relationship": {
+                    "principal_kind": relationship.principal_kind.value,
+                    "principal_id": relationship.principal_id,
+                    "principal_instance_id": relationship.principal_instance_id,
+                    "first_seen_at": relationship.first_seen_at.isoformat(),
+                    "last_seen_at": relationship.last_seen_at.isoformat(),
+                    "sessions_count": relationship.sessions_count,
+                },
+                "open_obligations": obligations_data["open_obligations"],
+                "cursor": obligations_data.get("cursor"),
+            }
 
         elif name == "asyncgate.create_task":
             created_by = Principal(
@@ -386,6 +425,15 @@ async def _handle_tool(name: str, arguments: dict[str, Any]) -> Any:
                 principal=principal,
             )
 
+        elif name == "asyncgate.check_terminator":
+            return {
+                "parent_receipt_id": arguments["parent_receipt_id"],
+                "has_terminator": await engine.has_terminator(
+                    tenant_id=UUID(arguments["tenant_id"]),
+                    parent_receipt_id=UUID(arguments["parent_receipt_id"]),
+                ),
+            }
+
         # TASKEE tools
         elif name == "asyncgate.lease_next":
             return await engine.lease_next(
@@ -415,14 +463,6 @@ async def _handle_tool(name: str, arguments: dict[str, Any]) -> Any:
                 progress_data=arguments["progress"],
             )
 
-        elif name == "asyncgate.start_task":
-            return await engine.start_task(
-                tenant_id=UUID(arguments["tenant_id"]),
-                worker_id=arguments["worker_id"],
-                task_id=UUID(arguments["task_id"]),
-                lease_id=UUID(arguments["lease_id"]),
-            )
-
         elif name == "asyncgate.complete":
             return await engine.complete(
                 tenant_id=UUID(arguments["tenant_id"]),
@@ -442,6 +482,16 @@ async def _handle_tool(name: str, arguments: dict[str, Any]) -> Any:
                 error=arguments["error"],
                 retryable=arguments.get("retryable", False),
             )
+
+        elif name == "asyncgate.health":
+            from asyncgate.config import settings
+            return {
+                "status": "healthy",
+                "service": "AsyncGate",
+                "version": "0.1.0",
+                "instance_id": settings.instance_id,
+                "environment": settings.env.value,
+            }
 
         elif name == "asyncgate.get_config":
             return await engine.get_config()

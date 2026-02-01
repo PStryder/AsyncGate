@@ -30,10 +30,15 @@ class Lease(BaseModel):
 class LeaseInfo(BaseModel):
     """Lease information returned to workers."""
 
+    tenant_id: UUID | None = None
     task_id: UUID
     lease_id: UUID
     type: str
     payload: dict
+    payload_pointer: str | None = None
+    principal_ai: str | None = None
     attempt: int
     expires_at: datetime
     requirements: dict | None = None
+    expected_outcome_kind: str | None = None
+    expected_artifact_mime: str | None = None

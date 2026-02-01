@@ -8,12 +8,12 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from asyncgate.api import router
 from asyncgate.api.deps import validate_auth_config
 from asyncgate.config import settings
 from asyncgate.db.base import close_db, init_db
 from asyncgate.instance import detect_instance_id, validate_instance_uniqueness
 from asyncgate.middleware.trace import trace_id_middleware
+from asyncgate.mcp.http import router as mcp_router
 from asyncgate.tasks.sweep import start_lease_sweep, stop_lease_sweep
 
 # Configure logging
@@ -83,8 +83,8 @@ app.add_middleware(
     allow_headers=settings.cors_allowed_headers,
 )
 
-# Include API router
-app.include_router(router)
+# MCP JSON-RPC endpoint
+app.include_router(mcp_router)
 
 
 def main():

@@ -14,6 +14,8 @@ async def test_receipts_ledger_endpoint_returns_memorygate_shape(client):
         json={
             "type": "demo_task",
             "payload": {"note": "hello"},
+            "payload_pointer": "depotgate://payload/demo-task",
+            "principal_ai": "agent.test",
             "expected_outcome_kind": "response_text",
             "expected_artifact_mime": "text/plain",
         },
@@ -40,4 +42,5 @@ async def test_receipts_ledger_endpoint_returns_memorygate_shape(client):
     assert assigned["task_id"] == task_id
     assert assigned["expected_outcome_kind"] == "response_text"
     assert assigned["expected_artifact_mime"] == "text/plain"
+    assert assigned["inputs"]["payload_pointer"] == "depotgate://payload/demo-task"
     assert "metadata" in assigned

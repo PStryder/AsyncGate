@@ -31,7 +31,8 @@ class CommandExecutorWorker:
         poll_interval_seconds: int = 1,
         allow_shell: bool = False,
         allowed_commands: Optional[list[str]] = None,
-        output_base_dir: str = "./outputs"
+        output_base_dir: str = "./outputs",
+        tenant_id: str = "default",
     ):
         self.asyncgate_url = asyncgate_url.rstrip('/')
         self.api_key = api_key
@@ -42,6 +43,8 @@ class CommandExecutorWorker:
         self.allowed_commands = [c for c in (allowed_commands or []) if c]
         self.output_base_dir = Path(output_base_dir).resolve()
         self.output_base_dir.mkdir(parents=True, exist_ok=True)
+        self.tenant_id = tenant_id
+        self.mcp_url = f"{self.asyncgate_url}/mcp"
         
         self.headers = {
             "Authorization": f"Bearer {api_key}",
@@ -57,6 +60,20 @@ class CommandExecutorWorker:
     async def close(self) -> None:
         """Close the HTTP client."""
         await self._client.aclose()
+
+    async def _mcp_call(self, tool: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
+        payload = {
+            "jsonrpc": "2.0",
+            "id": f"{tool}",
+            "method": "tools/call",
+            "params": {"name": tool, "arguments": arguments},
+        }
+        response = await self._client.post(self.mcp_url, json=payload, headers=self.headers)
+        response.raise_for_status()
+        data = response.json()
+        if data.get("error"):
+            raise RuntimeError(data["error"])
+        return data.get("result", {})
 
     def _normalize_command(self, command: str) -> str | list[str]:
         """Normalize command execution input and enforce safety."""
@@ -91,30 +108,21 @@ class CommandExecutorWorker:
     async def poll_for_task(self) -> Optional[Dict[str, Any]]:
         """Poll AsyncGate for available tasks matching our capabilities"""
         try:
-            response = await self._client.post(
-                f"{self.asyncgate_url}/v1/leases/claim",
-                headers=self.headers,
-                json={
+            data = await self._mcp_call(
+                "asyncgate.lease_next",
+                {
                     "worker_id": self.worker_id,
                     "capabilities": self.capabilities,
-                    "max_tasks": 1
+                    "max_tasks": 1,
+                    "tenant_id": self.tenant_id,
                 },
             )
-
-            if response.status_code == 204:
+            tasks = data.get("tasks", [])
+            if not tasks:
                 return None
-
-            if response.status_code == 200:
-                data = response.json()
-                tasks = data.get("tasks", [])
-                if not tasks:
-                    return None
-                task = tasks[0]
-                self.log(f"Received task: {task.get('task_id')}")
-                return task
-
-            self.log(f"Unexpected response from lease: {response.status_code}", "WARN")
-            return None
+            task = tasks[0]
+            self.log(f"Received task: {task.get('task_id')}")
+            return task
             
         except Exception as e:
             self.log(f"Error polling for task: {e}", "ERROR")
@@ -179,62 +187,56 @@ class CommandExecutorWorker:
         execution_result: Dict[str, Any],
     ) -> None:
         """Report task completion or failure to AsyncGate."""
-        if execution_result.get("success"):
-            payload = {
-                "worker_id": self.worker_id,
-                "lease_id": lease_id,
-                "result": {
-                    "exit_code": execution_result.get("exit_code"),
-                    "output_path": execution_result.get("output_path"),
-                },
-                "artifacts": {
-                    "output_path": execution_result.get("output_path"),
-                    "content_type": "application/json",
-                    "description": "Command execution output",
-                },
-            }
-            response = await self._client.post(
-                f"{self.asyncgate_url}/v1/tasks/{task_id}/complete",
-                headers=self.headers,
-                json=payload,
-            )
-        else:
-            payload = {
-                "worker_id": self.worker_id,
-                "lease_id": lease_id,
-                "error": {
-                    "message": execution_result.get("error"),
-                },
-                "retryable": False,
-            }
-            response = await self._client.post(
-                f"{self.asyncgate_url}/v1/tasks/{task_id}/fail",
-                headers=self.headers,
-                json=payload,
-            )
-
-        if response.status_code not in (200, 201):
-            self.log(
-                f"Failed to report completion: {response.status_code} - {response.text}",
-                "ERROR",
-            )
+        try:
+            if execution_result.get("success"):
+                await self._mcp_call(
+                    "asyncgate.complete",
+                    {
+                        "worker_id": self.worker_id,
+                        "task_id": task_id,
+                        "lease_id": lease_id,
+                        "result": {
+                            "exit_code": execution_result.get("exit_code"),
+                            "output_path": execution_result.get("output_path"),
+                        },
+                        "artifacts": {
+                            "output_path": execution_result.get("output_path"),
+                            "content_type": "application/json",
+                            "description": "Command execution output",
+                        },
+                        "tenant_id": self.tenant_id,
+                    },
+                )
+            else:
+                await self._mcp_call(
+                    "asyncgate.fail",
+                    {
+                        "worker_id": self.worker_id,
+                        "task_id": task_id,
+                        "lease_id": lease_id,
+                        "error": {"message": execution_result.get("error")},
+                        "retryable": False,
+                        "tenant_id": self.tenant_id,
+                    },
+                )
+        except Exception as exc:
+            self.log(f"Failed to report completion: {exc}", "ERROR")
 
     async def report_running(self, task_id: str, lease_id: str) -> None:
         """Report task start to AsyncGate."""
-        payload = {
-            "worker_id": self.worker_id,
-            "lease_id": lease_id,
-        }
-        response = await self._client.post(
-            f"{self.asyncgate_url}/v1/tasks/{task_id}/running",
-            headers=self.headers,
-            json=payload,
-        )
-        if response.status_code not in (200, 201):
-            self.log(
-                f"Failed to report running: {response.status_code} - {response.text}",
-                "WARN",
+        try:
+            await self._mcp_call(
+                "asyncgate.report_progress",
+                {
+                    "worker_id": self.worker_id,
+                    "task_id": task_id,
+                    "lease_id": lease_id,
+                    "progress": {"status": "running"},
+                    "tenant_id": self.tenant_id,
+                },
             )
+        except Exception as exc:
+            self.log(f"Failed to report running: {exc}", "WARN")
     
     async def process_task(self, task: Dict[str, Any]):
         """Complete task processing workflow"""
@@ -332,6 +334,11 @@ def main():
         default="./outputs",
         help="Base directory for output artifacts (default: ./outputs)"
     )
+    parser.add_argument(
+        "--tenant-id",
+        default="default",
+        help="Tenant identifier (default: default)"
+    )
     
     args = parser.parse_args()
     
@@ -342,7 +349,8 @@ def main():
         poll_interval_seconds=args.poll_interval,
         allow_shell=args.allow_shell,
         allowed_commands=args.allowed_commands,
-        output_base_dir=args.output_base_dir
+        output_base_dir=args.output_base_dir,
+        tenant_id=args.tenant_id,
     )
     
     asyncio.run(worker.run())

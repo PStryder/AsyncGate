@@ -5,7 +5,7 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
-revision = "0001_initial_schema"
+revision = "0001"
 down_revision = None
 branch_labels = None
 depends_on = None
@@ -13,8 +13,7 @@ depends_on = None
 
 def upgrade() -> None:
     """Create base tables and enums."""
-    bind = op.get_bind()
-
+    # Define enum types - SQLAlchemy will create them automatically when used
     principalkind = sa.Enum(
         "agent",
         "worker",
@@ -45,10 +44,6 @@ def upgrade() -> None:
         "system.anomaly",
         name="receipttype",
     )
-
-    principalkind.create(bind, checkfirst=True)
-    taskstatus.create(bind, checkfirst=True)
-    receipttype.create(bind, checkfirst=True)
 
     op.create_table(
         "auth_users",

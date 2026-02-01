@@ -9,7 +9,7 @@ from asyncgate.models.enums import (
     TaskStatus,
 )
 from asyncgate.models.principal import Principal
-from asyncgate.models.task import Task
+from asyncgate.models.task import Task, TaskRequirements, TaskResult, TaskSummary
 from asyncgate.models.lease import Lease
 from asyncgate.models.receipt import Receipt
 from asyncgate.models.progress import Progress
@@ -29,5 +29,8 @@ __all__ = [
     "ReceiptType",
     "Relationship",
     "Task",
+    "TaskRequirements",
+    "TaskResult",
     "TaskStatus",
+    "TaskSummary",
 ]

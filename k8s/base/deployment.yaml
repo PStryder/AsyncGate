@@ -19,10 +19,6 @@ spec:
     metadata:
       labels:
         app: asyncgate
-      annotations:
-        prometheus.io/scrape: "true"
-        prometheus.io/port: "9091"
-        prometheus.io/path: "/metrics"
     spec:
       securityContext:
         runAsNonRoot: true
@@ -71,17 +67,41 @@ spec:
               name: asyncgate-secrets
               key: ASYNCGATE_DATABASE_URL
         livenessProbe:
-          httpGet:
-            path: /v1/health
-            port: 8080
+          exec:
+            command:
+            - python
+            - -c
+            - |
+              import json, os, urllib.request
+              url = os.environ.get("ASYNCGATE_MCP_URL", "http://localhost:8080/mcp")
+              token = os.environ.get("ASYNCGATE_API_KEY") or os.environ.get("ASYNCGATE_AUTH_TOKEN")
+              payload = {"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "asyncgate.health", "arguments": {}}}
+              req = urllib.request.Request(url, data=json.dumps(payload).encode(), headers={"Content-Type": "application/json"})
+              if token:
+                  req.add_header("Authorization", "Bearer " + token)
+              resp = urllib.request.urlopen(req, timeout=5)
+              data = json.load(resp)
+              assert "result" in data
           initialDelaySeconds: 30
           periodSeconds: 10
           timeoutSeconds: 5
           failureThreshold: 3
         readinessProbe:
-          httpGet:
-            path: /v1/health
-            port: 8080
+          exec:
+            command:
+            - python
+            - -c
+            - |
+              import json, os, urllib.request
+              url = os.environ.get("ASYNCGATE_MCP_URL", "http://localhost:8080/mcp")
+              token = os.environ.get("ASYNCGATE_API_KEY") or os.environ.get("ASYNCGATE_AUTH_TOKEN")
+              payload = {"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "asyncgate.health", "arguments": {}}}
+              req = urllib.request.Request(url, data=json.dumps(payload).encode(), headers={"Content-Type": "application/json"})
+              if token:
+                  req.add_header("Authorization", "Bearer " + token)
+              resp = urllib.request.urlopen(req, timeout=5)
+              data = json.load(resp)
+              assert "result" in data
           initialDelaySeconds: 5
           periodSeconds: 5
           timeoutSeconds: 3
