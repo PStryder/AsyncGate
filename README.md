@@ -22,6 +22,11 @@ AsyncGate does **not** plan, reason, schedule, or orchestrate strategy. It store
 - **Leases**: Time-bounded exclusive claims on tasks by workers
 - **Receipts**: Immutable contract records for audit and coordination
 
+### Task Schema Notes (LegiVellum)
+
+- `principal_ai` is required on task creation and defines the obligation owner for receipt routing.
+- `payload_pointer` is preferred for non-trivial payloads; `payload` is legacy inline data.
+
 ## Quick Start
 
 ### Prerequisites

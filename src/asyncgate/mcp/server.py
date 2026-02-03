@@ -68,8 +68,11 @@ TOOL_DEFS: list[dict[str, Any]] = [
             "type": "object",
             "properties": {
                 "type": {"type": "string", "description": "Task type"},
-                "payload": {"type": "object", "description": "Task payload"},
-                "payload_pointer": {"type": "string", "description": "Pointer to task payload"},
+                "payload": {"type": "object", "description": "Legacy inline payload (prefer payload_pointer)"},
+                "payload_pointer": {
+                    "type": "string",
+                    "description": "Pointer to task payload stored in DepotGate or external store",
+                },
                 "principal_ai": {"type": "string", "description": "Principal AI that owns the obligation"},
                 "requirements": {"type": "object", "description": "Task requirements"},
                 "expected_outcome_kind": {"type": "string", "description": "Expected outcome kind"},
