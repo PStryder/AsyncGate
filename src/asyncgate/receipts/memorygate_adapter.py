@@ -68,6 +68,16 @@ def _extract_artifact_fields(artifacts: Any) -> dict[str, Any]:
     }
 
 
+def _extract_artifact_refs(artifacts: Any) -> list[dict[str, Any]]:
+    if not artifacts:
+        return []
+    if isinstance(artifacts, list):
+        return [item for item in artifacts if isinstance(item, dict)]
+    if isinstance(artifacts, dict):
+        return [artifacts]
+    return []
+
+
 def _derive_phase_and_status(receipt: Receipt, task: Task | None) -> tuple[str, str]:
     if receipt.receipt_type == ReceiptType.TASK_ESCALATED:
         return "escalate", "NA"
@@ -142,7 +152,11 @@ def to_memorygate_receipt(receipt: Receipt, task: Task | None) -> dict[str, Any]
     artifacts_source = body.get("artifacts")
     if artifacts_source is None and task and task.result:
         artifacts_source = task.result.artifacts
+    artifact_refs_source = body.get("artifact_refs")
+    if artifact_refs_source is None:
+        artifact_refs_source = artifacts_source
     artifact_fields = _extract_artifact_fields(artifacts_source)
+    artifact_refs = _extract_artifact_refs(artifact_refs_source)
 
     expected_outcome_kind = (
         task.expected_outcome_kind if task and task.expected_outcome_kind else "NA"
@@ -230,6 +244,8 @@ def to_memorygate_receipt(receipt: Receipt, task: Task | None) -> dict[str, Any]
         "outcome_text": outcome_text,
         **artifact_fields,
         **escalation_fields,
+        "body": dict(body),
+        "artifact_refs": artifact_refs,
         "created_at": created_at,
         "stored_at": created_at,
         "started_at": started_at,
