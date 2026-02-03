@@ -28,6 +28,7 @@ async def test_obligations_open_returns_flat_list(session: AsyncSession):
     receipts = ReceiptRepository(session)
     tenant_id = uuid4()
     agent = Principal(kind=PrincipalKind.AGENT, id="test-agent")
+    system = Principal(kind=PrincipalKind.SYSTEM, id=SYSTEM_PRINCIPAL_ID)
     
     # Create 20 obligations of different types
     obligation_types = [
@@ -112,14 +113,25 @@ async def test_obligations_open_api_returns_flat_json(
     
     await session.commit()
     
-    # Call API endpoint
-    response = await client.get(
-        f"/v1/obligations/open?principal_kind={PrincipalKind.AGENT.value}&principal_id={agent.id}",
-        headers={"X-Tenant-ID": str(tenant_id)},
+    # Call MCP bootstrap (open obligations)
+    response = await client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {
+                "name": "asyncgate.bootstrap",
+                "arguments": {
+                    "agent_id": agent.id,
+                    "tenant_id": str(tenant_id),
+                },
+            },
+        },
     )
     
     assert response.status_code == 200
-    data = response.json()
+    data = response.json()["result"]
     
     # CRITICAL: Response must include a flat open_obligations list
     assert isinstance(data, dict), \

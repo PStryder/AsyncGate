@@ -144,7 +144,7 @@ def test_cors_preflight_request():
     
     # Preflight request
     response = client.options(
-        "/v1/health",
+        "/mcp",
         headers={
             "Origin": "http://localhost:3000",
             "Access-Control-Request-Method": "POST",
@@ -163,9 +163,15 @@ def test_cors_rejects_unauthorized_origin():
     client = TestClient(app)
     
     # Request from unauthorized origin
-    response = client.get(
-        "/v1/health",
-        headers={"Origin": "https://evil.com"}
+    response = client.post(
+        "/mcp",
+        headers={"Origin": "https://evil.com"},
+        json={
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {"name": "asyncgate.health", "arguments": {}},
+        },
     )
     
     # Response should succeed (health check always works)

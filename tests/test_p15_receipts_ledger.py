@@ -3,32 +3,51 @@ Receipt ledger endpoint tests.
 """
 
 import pytest
+from uuid import uuid4
 
 
 @pytest.mark.asyncio
 async def test_receipts_ledger_endpoint_returns_memorygate_shape(client):
     """Receipt ledger returns MemoryGate-style receipt records."""
+    tenant_id = str(uuid4())
     create_response = await client.post(
-        "/v1/tasks",
-        params={"principal_id": "test-agent"},
+        "/mcp",
         json={
-            "type": "demo_task",
-            "payload": {"note": "hello"},
-            "payload_pointer": "depotgate://payload/demo-task",
-            "principal_ai": "agent.test",
-            "expected_outcome_kind": "response_text",
-            "expected_artifact_mime": "text/plain",
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {
+                "name": "asyncgate.create_task",
+                "arguments": {
+                    "type": "demo_task",
+                    "payload": {"note": "hello"},
+                    "payload_pointer": "depotgate://payload/demo-task",
+                    "principal_ai": "agent.test",
+                    "expected_outcome_kind": "response_text",
+                    "expected_artifact_mime": "text/plain",
+                    "agent_id": "test-agent",
+                    "tenant_id": tenant_id,
+                },
+            },
         },
     )
     assert create_response.status_code == 200
-    task_id = create_response.json()["task_id"]
+    task_id = create_response.json()["result"]["task_id"]
 
-    ledger_response = await client.get(
-        "/v1/receipts/ledger",
-        params={"task_id": task_id},
+    ledger_response = await client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/call",
+            "params": {
+                "name": "asyncgate.list_receipts_ledger",
+                "arguments": {"task_id": task_id, "tenant_id": tenant_id},
+            },
+        },
     )
     assert ledger_response.status_code == 200
-    data = ledger_response.json()
+    data = ledger_response.json()["result"]
     assert data["receipts"], "Expected at least one receipt"
 
     assigned = None

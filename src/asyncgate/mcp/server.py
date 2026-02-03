@@ -15,7 +15,7 @@ from asyncgate.engine import (
     LeaseInvalidOrExpired,
     TaskNotFound,
 )
-from asyncgate.models import Principal, PrincipalKind
+from asyncgate.models import Principal, PrincipalKind, ReceiptType, TaskStatus
 from asyncgate.observability.trace import set_trace_id
 
 
@@ -142,6 +142,23 @@ TOOL_DEFS: list[dict[str, Any]] = [
                 "tenant_id": {"type": "string", "description": "Tenant ID"},
             },
             "required": ["to_kind", "to_id", "tenant_id"],
+        }),
+    },
+    {
+        "name": "asyncgate.list_receipts_ledger",
+        "description": "List receipts with ledger filters",
+        "inputSchema": _with_auth_schema({
+            "type": "object",
+            "properties": {
+                "task_id": {"type": "string", "description": "Filter by task UUID"},
+                "lease_id": {"type": "string", "description": "Filter by lease UUID"},
+                "receipt_type": {"type": "string", "description": "Filter by receipt type"},
+                "task_status": {"type": "string", "description": "Filter by task status"},
+                "since_receipt_id": {"type": "string", "description": "Cursor"},
+                "limit": {"type": "integer", "description": "Max results"},
+                "tenant_id": {"type": "string", "description": "Tenant ID"},
+            },
+            "required": ["tenant_id"],
         }),
     },
     {
@@ -413,6 +430,19 @@ async def _handle_tool(name: str, arguments: dict[str, Any]) -> Any:
                 tenant_id=UUID(arguments["tenant_id"]),
                 to_kind=arguments["to_kind"],
                 to_id=arguments["to_id"],
+                since_receipt_id=UUID(arguments["since_receipt_id"]) if arguments.get("since_receipt_id") else None,
+                limit=arguments.get("limit"),
+            )
+
+        elif name == "asyncgate.list_receipts_ledger":
+            receipt_type = arguments.get("receipt_type")
+            task_status = arguments.get("task_status")
+            return await engine.list_receipts_ledger(
+                tenant_id=UUID(arguments["tenant_id"]),
+                task_id=UUID(arguments["task_id"]) if arguments.get("task_id") else None,
+                lease_id=UUID(arguments["lease_id"]) if arguments.get("lease_id") else None,
+                receipt_type=ReceiptType(receipt_type) if receipt_type else None,
+                task_status=TaskStatus(task_status) if task_status else None,
                 since_receipt_id=UUID(arguments["since_receipt_id"]) if arguments.get("since_receipt_id") else None,
                 limit=arguments.get("limit"),
             )

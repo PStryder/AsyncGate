@@ -106,36 +106,9 @@ docker-compose up --build
 python scripts/golden_path.py
 ```
 
-## API
+## MCP Interface
 
-### REST Endpoints
-
-#### Health & Config
-
-- `GET /v1/health` - Health check endpoint
-- `GET /v1/config` - Get server configuration
-
-#### Obligations (Canonical Bootstrap)
-
-- `GET /v1/obligations/open` - Get open obligations for a principal (ledger dump, no bucketing)
-
-#### TASKER (Agent) Endpoints
-
-- `GET /v1/bootstrap` - **DEPRECATED**: Use `/v1/obligations/open` instead
-- `POST /v1/tasks` - Create a new task
-- `GET /v1/tasks/{task_id}` - Get task by ID
-- `GET /v1/tasks` - List tasks
-- `POST /v1/tasks/{task_id}/cancel` - Cancel a task
-- `GET /v1/receipts` - List receipts for a principal
-- `POST /v1/receipts/{receipt_id}/ack` - Acknowledge a receipt
-
-#### TASKEE (Worker) Endpoints
-
-- `POST /v1/leases/claim` - Claim next available tasks
-- `POST /v1/leases/renew` - Renew a lease
-- `POST /v1/tasks/{task_id}/progress` - Report progress
-- `POST /v1/tasks/{task_id}/complete` - Mark task completed
-- `POST /v1/tasks/{task_id}/fail` - Mark task failed
+AsyncGate exposes MCP over HTTP at `/mcp` with JSON-RPC methods `tools/list` and `tools/call`.
 
 ### MCP Tools
 
@@ -146,6 +119,7 @@ TASKER tools:
 - `asyncgate.list_tasks`
 - `asyncgate.cancel_task`
 - `asyncgate.list_receipts`
+- `asyncgate.list_receipts_ledger`
 - `asyncgate.ack_receipt`
 
 TASKEE tools:
