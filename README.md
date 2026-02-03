@@ -106,6 +106,12 @@ docker-compose up --build
 python scripts/golden_path.py
 ```
 
+## Tests
+
+```bash
+pytest tests/ -v
+```
+
 ## MCP Interface
 
 AsyncGate exposes MCP over HTTP at `/mcp` with JSON-RPC methods `tools/list` and `tools/call`.
@@ -131,6 +137,7 @@ TASKEE tools:
 
 System:
 - `asyncgate.get_config`
+- `asyncgate.health`
 
 ## Configuration
 
