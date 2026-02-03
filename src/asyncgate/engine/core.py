@@ -548,6 +548,7 @@ class AsyncGateEngine:
                     ),
                 )
 
+                caused_by_receipt_id = str(obligation.receipt_id) if obligation else "NA"
                 results.append({
                     "tenant_id": task.tenant_id,
                     "task_id": task.task_id,
@@ -556,6 +557,7 @@ class AsyncGateEngine:
                     "payload": task.payload,
                     "payload_pointer": task.payload_pointer,
                     "principal_ai": task.principal_ai,
+                    "caused_by_receipt_id": caused_by_receipt_id,
                     "attempt": task.attempt,
                     "expires_at": lease.expires_at,
                     "requirements": task.requirements.model_dump() if task.requirements else None,
