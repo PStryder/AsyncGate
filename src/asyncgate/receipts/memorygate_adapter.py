@@ -192,6 +192,8 @@ def to_memorygate_receipt(receipt: Receipt, task: Task | None) -> dict[str, Any]
         from_principal = owner_principal
         for_principal = owner_principal
         recipient_ai = task.principal_ai or _principal_value(receipt.to_)
+        if receipt.receipt_type == ReceiptType.TASK_ACCEPTED:
+            recipient_ai = _principal_value(receipt.from_)
     else:
         from_principal = _principal_value(receipt.from_)
         for_principal = _principal_value(receipt.to_)
