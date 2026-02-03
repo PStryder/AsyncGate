@@ -277,16 +277,10 @@ if task.status == "SUCCEEDED":
 
 ## Migration Guide
 
-### From Old Bootstrap to MCP Bootstrap
+### Bootstrap (MCP-only)
 
-**Before (legacy REST):**
-```python
-response = await client.get("/v1/bootstrap", ...)
-waiting = response["attention"]["waiting_results"]
-assigned = response["attention"]["assigned_tasks"]
-```
+Legacy REST bootstrap has been removed. Use MCP JSON-RPC over `/mcp`:
 
-**After (MCP):**
 ```python
 payload = {
     "jsonrpc": "2.0",

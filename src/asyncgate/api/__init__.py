@@ -1,5 +1,3 @@
-"""AsyncGate REST API."""
+"""AsyncGate HTTP helpers (MCP-only)."""
 
-from asyncgate.api.router import router
-
-__all__ = ["router"]
+__all__: list[str] = []
