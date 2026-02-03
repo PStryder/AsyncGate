@@ -146,7 +146,7 @@ class AsyncGateEngine:
         
         Legacy bootstrap with attention semantics. Simplified to remove
         task-state queries (wrong model). Returns minimal response for
-        API compatibility while clients migrate to /v1/obligations/open.
+        API compatibility while clients migrate to asyncgate.bootstrap.
         
         Bootstrap is idempotent and safe to call frequently.
         """
@@ -185,7 +185,7 @@ class AsyncGateEngine:
         ]
 
         # DEPRECATED: Task-state bucketing removed (Tier 3 cleanup)
-        # Clients should migrate to /v1/obligations/open for correct model.
+        # Clients should migrate to asyncgate.bootstrap for correct model.
         # Return empty lists for backward compatibility.
 
         return {
@@ -206,9 +206,9 @@ class AsyncGateEngine:
             },
             "attention": {
                 "inbox_receipts": [self._receipt_to_dict(r) for r in inbox_receipts],
-                "assigned_tasks": [],  # REMOVED: Use /v1/obligations/open
-                "waiting_results": [],  # REMOVED: Use /v1/obligations/open
-                "running_or_scheduled": [],  # REMOVED: Use /v1/obligations/open
+                "assigned_tasks": [],  # REMOVED: Use asyncgate.bootstrap
+                "waiting_results": [],  # REMOVED: Use asyncgate.bootstrap
+                "running_or_scheduled": [],  # REMOVED: Use asyncgate.bootstrap
                 "anomalies": anomalies,
             },
             "cursor": {

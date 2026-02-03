@@ -25,7 +25,7 @@ psql $DATABASE_URL -f migrations/001_add_parents_gin_index.sql
 Adds GIN index on `receipts.parents` JSONB column for fast containment queries.
 
 **Impact:**
-- Reduces `/v1/obligations/open` from O(n²) to O(n) performance
+- Reduces `open-obligation queries (asyncgate.bootstrap)` from O(n²) to O(n) performance
 - Changes query pattern from N+1 to batched (2 queries total)
 - With 100K receipts: 60M row scans → ~200 rows scanned
 

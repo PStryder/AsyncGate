@@ -50,16 +50,10 @@ python worker.py
 ### Queueing a Test Task
 
 ```bash
-curl -X POST http://localhost:8000/v1/tasks \
+curl -s http://localhost:8000/mcp \
   -H "Authorization: Bearer your-api-key" \
   -H "Content-Type: application/json" \
-  -d '{
-    "task_type": "command.execute",
-    "payload": {
-      "command": "echo \"Hello from AsyncGate\"",
-      "output_path": "/tmp/asyncgate_test_output.json"
-    }
-  }'
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"asyncgate.create_task","arguments":{"type":"command.execute","payload":{"command":"echo \"Hello from AsyncGate\"","output_path":"/tmp/asyncgate_test_output.json"},"principal_ai":"command-exec","agent_id":"command-exec","tenant_id":"TENANT_ID"}}}'
 ```
 
 ### Expected Output File
@@ -89,7 +83,7 @@ curl -X POST http://localhost:8000/v1/tasks \
 ## Receipt Flow
 
 1. **AsyncGate creates task** → queued receipt emitted
-2. **Worker polls** → receives task offer via `/v1/lease`
+2. **Worker polls** → receives task offer via `asyncgate.lease_next`
 3. **Worker accepts** → emits `accepted` receipt (parent: queued)
 4. **Worker executes** → runs command, writes to filesystem
 5. **Worker reports** → emits `success` receipt (parent: accepted) with artifact pointer
@@ -128,16 +122,10 @@ For production use, implement:
 
 3. **Queue Task**:
    ```bash
-   curl -X POST http://localhost:8000/v1/tasks \
+   curl -s http://localhost:8000/mcp \
      -H "Authorization: Bearer test-key" \
      -H "Content-Type: application/json" \
-     -d '{
-       "task_type": "command.execute",
-       "payload": {
-         "command": "ls -la /tmp",
-         "output_path": "/tmp/ls_output.json"
-       }
-     }'
+     -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"asyncgate.create_task","arguments":{"type":"command.execute","payload":{"command":"ls -la /tmp","output_path":"/tmp/ls_output.json"},"principal_ai":"command-exec","agent_id":"command-exec","tenant_id":"TENANT_ID"}}}'
    ```
 
 4. **Verify**:

@@ -1,7 +1,7 @@
 """
 P2.2 Regression Test: Unbucketed bootstrap
 
-Tests that /v1/obligations/open returns a FLAT LIST, never bucketed/grouped.
+Tests that asyncgate.bootstrap returns a FLAT LIST, never bucketed/grouped.
 This is a critical invariant: bootstrap = obligation dump, not inbox.
 
 If this test fails, someone has introduced inbox bucketing logic.
@@ -21,7 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 @pytest.mark.asyncio
 async def test_obligations_open_returns_flat_list(session: AsyncSession):
     """
-    Verify /v1/obligations/open returns a flat list of receipts.
+    Verify asyncgate.bootstrap returns a flat list of receipts.
     
     Bootstrap MUST be a pure dump with no bucketing, grouping, or inbox logic.
     """

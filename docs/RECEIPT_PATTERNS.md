@@ -31,11 +31,23 @@ receipt = {
 Agent queues task → AsyncGate creates obligation receipt:
 
 ```python
-# Agent calls: POST /v1/tasks
-response = await client.post("/v1/tasks", {
-    "type": "data_analysis",
-    "payload": {"dataset_url": "s3://..."},
-})
+# Agent calls: asyncgate.create_task (MCP)
+payload = {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "tools/call",
+    "params": {
+        "name": "asyncgate.create_task",
+        "arguments": {
+            "type": "data_analysis",
+            "payload": {"dataset_url": "s3://..."},
+            "principal_ai": "my-agent",
+            "agent_id": "my-agent",
+            "tenant_id": "TENANT_ID",
+        },
+    },
+}
+response = await client.post("/mcp", json=payload)
 
 # AsyncGate emits: task.assigned receipt
 # This creates an OBLIGATION for the agent
@@ -57,21 +69,34 @@ response = await client.post("/v1/tasks", {
 Worker completes task → sends success receipt with locatability:
 
 ```python
-# Worker calls: POST /v1/leases/{lease_id}/complete
-await client.post(f"/v1/leases/{lease_id}/complete", {
-    "result": {
-        "summary": "Analysis complete",
-        "payload": {"row_count": 10000}
+# Worker calls: asyncgate.complete (MCP)
+payload = {
+    "jsonrpc": "2.0",
+    "id": 2,
+    "method": "tools/call",
+    "params": {
+        "name": "asyncgate.complete",
+        "arguments": {
+            "worker_id": "worker-1",
+            "task_id": "TASK_ID",
+            "lease_id": "LEASE_ID",
+            "result": {
+                "summary": "Analysis complete",
+                "payload": {"row_count": 10000}
+            },
+            "artifacts": [  # ??? LOCATABILITY REQUIRED
+                {
+                    "type": "s3",
+                    "bucket": "results",
+                    "key": "analysis/output.csv",
+                    "url": "s3://results/analysis/output.csv"
+                }
+            ],
+            "tenant_id": "TENANT_ID",
+        },
     },
-    "artifacts": [  # ← LOCATABILITY REQUIRED
-        {
-            "type": "s3",
-            "bucket": "results",
-            "key": "analysis/output.csv",
-            "url": "s3://results/analysis/output.csv"
-        }
-    ]
-})
+}
+await client.post("/mcp", json=payload)
 
 # AsyncGate emits: task.completed receipt
 {
@@ -178,14 +203,29 @@ Work pushed to endpoint, receipt confirms delivery:
 Worker fails task → obligation stays open, task requeued:
 
 ```python
-# Worker calls: POST /v1/leases/{lease_id}/fail
-await client.post(f"/v1/leases/{lease_id}/fail", {
-    "error": {
-        "type": "DataValidationError",
-        "message": "Invalid CSV format"
+# Worker calls: asyncgate.fail (MCP)
+payload = {
+    "jsonrpc": "2.0",
+    "id": 3,
+    "method": "tools/call",
+    "params": {
+        "name": "asyncgate.fail",
+        "arguments": {
+            "worker_id": "worker-1",
+            "task_id": "TASK_ID",
+            "lease_id": "LEASE_ID",
+            "error": {
+                "type": "DataValidationError",
+                "message": "Invalid CSV format"
+            },
+            "retryable": True,  # ??? Task will be requeued
+            "tenant_id": "TENANT_ID",
+        },
     },
-    "retryable": True  # ← Task will be requeued
-})
+}
+await client.post("/mcp", json=payload)
+
+
 
 # AsyncGate does NOT emit task.failed receipt yet
 # Task goes back to QUEUED with backoff
@@ -219,12 +259,22 @@ Worker fails task (max attempts reached) → obligation discharged:
 Agent cancels task → obligation discharged:
 
 ```python
-# Agent calls: POST /v1/tasks/{task_id}/cancel
-await client.post(f"/v1/tasks/{task_id}/cancel", {
-    "principal_kind": "agent",
-    "principal_id": "my-agent",
-    "reason": "Requirements changed"
-})
+# Agent calls: asyncgate.cancel_task (MCP)
+payload = {
+    "jsonrpc": "2.0",
+    "id": 4,
+    "method": "tools/call",
+    "params": {
+        "name": "asyncgate.cancel_task",
+        "arguments": {
+            "task_id": "TASK_ID",
+            "agent_id": "my-agent",
+            "reason": "Requirements changed",
+            "tenant_id": "TENANT_ID",
+        },
+    },
+}
+await client.post("/mcp", json=payload)
 
 # AsyncGate emits: task.canceled receipt
 {

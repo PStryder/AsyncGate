@@ -92,7 +92,7 @@ from fastapi import Depends
 from asyncgate.middleware import rate_limit_dependency
 
 router = APIRouter(
-    prefix="/v1",
+    prefix="/mcp",
     dependencies=[
         Depends(verify_api_key),
         Depends(rate_limit_dependency),  # Add this
@@ -107,7 +107,7 @@ from asyncgate.middleware import get_rate_limiter
 # Configure specific endpoints
 limiter = get_rate_limiter()
 limiter.configure_endpoint(
-    path="/v1/tasks",
+    path="/mcp",
     calls=50,          # 50 calls
     window_seconds=60, # per minute
     key_prefix="create-task:"

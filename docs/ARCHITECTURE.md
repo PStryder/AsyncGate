@@ -151,15 +151,17 @@ delivery_proof = {
 
 **Without locatability:** Parents are stripped, obligation stays open.
 
-## API Endpoints
+## MCP Interface
 
-### Primary: `/v1/obligations/open`
+AsyncGate exposes MCP over HTTP at `/mcp` with JSON-RPC methods `tools/list` and `tools/call`.
 
-Returns unbucketed obligation dump:
+### Primary: `asyncgate.bootstrap`
+
+Returns an unbucketed obligation dump in `open_obligations`:
 
 ```json
 {
-  "server": {...},
+  "server": {"name": "AsyncGate"},
   "relationship": {...},
   "open_obligations": [
     {
@@ -175,14 +177,9 @@ Returns unbucketed obligation dump:
 
 **No bucketing, no attention semantics, no task state interpretation.**
 
-### Deprecated: `/v1/bootstrap`
+### Terminator checks: `asyncgate.check_terminator`
 
-Legacy endpoint with attention semantics. Simplified to return:
-- Inbox receipts (for compatibility)
-- Empty task lists (removed task-state queries)
-- Deprecation headers
-
-**Clients should migrate to `/v1/obligations/open`.**
+Use `asyncgate.check_terminator` to verify if a parent receipt has terminating evidence.
 
 ## Receipt Chain Patterns
 
@@ -225,18 +222,37 @@ complete_receipt = await receipts.create(
 
 ```python
 # Query open obligations
-response = await client.get("/v1/obligations/open", params={
-    "principal_kind": "agent",
-    "principal_id": "my-agent",
-    "limit": 50,
-})
+payload = {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "tools/call",
+    "params": {
+        "name": "asyncgate.bootstrap",
+        "arguments": {
+            "agent_id": "my-agent",
+            "tenant_id": "TENANT_ID",
+        },
+    },
+}
+response = await client.post("/mcp", json=payload)
 
-obligations = response["open_obligations"]
+obligations = response["result"]["open_obligations"]
 
 # For specific obligation, check if terminated
-has_terminator = await client.post("/v1/receipts/check-terminator", {
-    "parent_receipt_id": obligation_id,
-})
+check_payload = {
+    "jsonrpc": "2.0",
+    "id": 2,
+    "method": "tools/call",
+    "params": {
+        "name": "asyncgate.check_terminator",
+        "arguments": {
+            "parent_receipt_id": obligation_id,
+            "tenant_id": "TENANT_ID",
+        },
+    },
+}
+check_resp = await client.post("/mcp", json=check_payload)
+has_terminator = check_resp["result"]["has_terminator"]
 
 if has_terminator:
     # Obligation discharged - work is done or failed
@@ -261,19 +277,31 @@ if task.status == "SUCCEEDED":
 
 ## Migration Guide
 
-### From Old Bootstrap to New
+### From Old Bootstrap to MCP Bootstrap
 
-**Before:**
+**Before (legacy REST):**
 ```python
 response = await client.get("/v1/bootstrap", ...)
 waiting = response["attention"]["waiting_results"]
 assigned = response["attention"]["assigned_tasks"]
 ```
 
-**After:**
+**After (MCP):**
 ```python
-response = await client.get("/v1/obligations/open", ...)
-obligations = response["open_obligations"]
+payload = {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "tools/call",
+    "params": {
+        "name": "asyncgate.bootstrap",
+        "arguments": {
+            "agent_id": "my-agent",
+            "tenant_id": "TENANT_ID",
+        },
+    },
+}
+response = await client.post("/mcp", json=payload)
+obligations = response["result"]["open_obligations"]
 
 # Filter by type if needed
 assigned = [o for o in obligations if o["receipt_type"] == "task.assigned"]

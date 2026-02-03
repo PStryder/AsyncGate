@@ -1,5 +1,5 @@
 -- Migration: Add GIN index on receipts.parents for fast containment queries
--- Priority: P0.1 - Performance critical for /v1/obligations/open endpoint
+-- Priority: P0.1 - Performance critical for open-obligation queries (asyncgate.bootstrap) endpoint
 -- Date: 2026-01-05
 -- Issue: Without this index, list_open_obligations performs O(n) full table scans
 --        With 100K receipts and limit=200, this means 60M row scans per API call

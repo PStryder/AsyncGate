@@ -42,8 +42,10 @@ This will:
 ### 3. Verify It's Running
 
 ```bash
-# Health check
-curl http://localhost:8000/v1/health
+# Health check (MCP)
+curl -s http://localhost:8000/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"asyncgate.health","arguments":{}}}'
 
 # Should return: {"status":"healthy"}
 ```

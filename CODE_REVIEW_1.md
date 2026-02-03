@@ -1,3 +1,5 @@
+> LEGACY NOTE (2026-02-03): AsyncGate is MCP-only. REST endpoint references in this review are historical.
+
 # AsyncGate Code Review Report
 
 **Project:** AsyncGate

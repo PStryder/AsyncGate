@@ -77,7 +77,7 @@ http://localhost:8080
 
 **Test 1: Allowed Origin**
 ```bash
-curl -X OPTIONS http://localhost:8080/v1/health \
+curl -X OPTIONS http://localhost:8080/mcp \
   -H "Origin: http://localhost:3000" \
   -H "Access-Control-Request-Method: POST" \
   -v
@@ -88,7 +88,7 @@ curl -X OPTIONS http://localhost:8080/v1/health \
 
 **Test 2: Blocked Origin**
 ```bash
-curl -X OPTIONS http://localhost:8080/v1/health \
+curl -X OPTIONS http://localhost:8080/mcp \
   -H "Origin: https://evil.com" \
   -H "Access-Control-Request-Method: POST" \
   -v
@@ -112,7 +112,9 @@ print(f"Window: {settings.rate_limit_default_window_seconds}s")
 ```bash
 # Send 110 requests rapidly (exceeds default limit of 100)
 for i in {1..110}; do
-  curl http://localhost:8080/v1/health &
+  curl -s http://localhost:8080/mcp \
+    -H "Content-Type: application/json" \
+    -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"asyncgate.health","arguments":{}}}' &
 done
 wait
 
@@ -165,7 +167,7 @@ wait
 
 **Example Error:**
 ```
-Access to fetch at 'http://asyncgate.com/v1/tasks' from origin 'https://newapp.com' 
+Access to fetch at 'http://asyncgate.com/mcp' from origin 'https://newapp.com' 
 has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present
 ```
 
@@ -205,7 +207,7 @@ Or implement per-tenant rate limiting (future enhancement).
 - [ ] Rate limiting can be disabled in development (if needed)
 - [ ] API still works with valid origins
 - [ ] Preflight OPTIONS requests succeed
-- [ ] Health check endpoint is accessible
+- [ ] MCP health tool is accessible
 
 ---
 

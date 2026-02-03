@@ -1,4 +1,4 @@
-"""REST API router."""
+"""REST API router (LEGACY, not mounted)."""
 
 import json
 from typing import Optional

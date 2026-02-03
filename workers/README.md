@@ -13,7 +13,7 @@ AsyncGate provides **coordination substrate** - it manages the obligation ledger
 - Manage worker lifecycle
 
 Workers are **independent processes** that:
-- Poll AsyncGate's `/v1/lease` endpoint
+- Call `asyncgate.lease_next` via MCP
 - Declare capabilities on each poll (stateless)
 - Accept tasks by emitting receipts
 - Execute work autonomously
@@ -79,33 +79,33 @@ The manifest is **documentation only** - AsyncGate doesn't read it. Workers decl
 ### 1. Poll for Tasks
 
 ```http
-POST /v1/lease
+POST /mcp
+Content-Type: application/json
 Authorization: Bearer {api_key}
 
 {
-  "worker_id": "unique-worker-id",
-  "capabilities": ["task.type.one", "task.type.two"]
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "tools/call",
+  "params": {
+    "name": "asyncgate.lease_next",
+    "arguments": {
+      "worker_id": "unique-worker-id",
+      "capabilities": ["task.type.one", "task.type.two"],
+      "max_tasks": 1,
+      "tenant_id": "TENANT_ID"
+    }
+  }
 }
 ```
 
 **Responses:**
-- `204 No Content` - No matching tasks available
-- `200 OK` - Task offer with lease
+- Empty list of leases when no tasks available
+- One or more leases when tasks are offered
 
 ### 2. Accept Task
 
-Emit `accepted` receipt:
-
-```json
-{
-  "receipt_type": "accepted",
-  "parent_receipt_ids": ["{queued_receipt_id}"],
-  "body": {
-    "worker_id": "unique-worker-id",
-    "accepted_at": "2026-01-06T18:00:00Z"
-  }
-}
-```
+Emit an `accepted` receipt to ReceiptGate (not AsyncGate). Include the queued receipt as parent.
 
 ### 3. Execute Work
 
@@ -113,30 +113,42 @@ Do whatever the task requires - execute commands, call APIs, process data, etc.
 
 ### 4. Report Completion
 
-**Success:**
+**Success (MCP):**
 ```json
 {
-  "receipt_type": "success",
-  "parent_receipt_ids": ["{accepted_receipt_id}"],
-  "body": {
-    "completed_at": "2026-01-06T18:01:00Z"
-  },
-  "artifacts": [{
-    "path": "/path/to/output",
-    "content_type": "application/json",
-    "description": "Task output"
-  }]
+  "jsonrpc": "2.0",
+  "id": 2,
+  "method": "tools/call",
+  "params": {
+    "name": "asyncgate.complete",
+    "arguments": {
+      "worker_id": "unique-worker-id",
+      "task_id": "TASK_ID",
+      "lease_id": "LEASE_ID",
+      "result": {"summary": "Completed"},
+      "artifacts": [{"type": "s3", "url": "s3://..."}],
+      "tenant_id": "TENANT_ID"
+    }
+  }
 }
 ```
 
-**Failure:**
+**Failure (MCP):**
 ```json
 {
-  "receipt_type": "failure",
-  "parent_receipt_ids": ["{accepted_receipt_id}"],
-  "body": {
-    "error": "Description of what went wrong",
-    "failed_at": "2026-01-06T18:01:00Z"
+  "jsonrpc": "2.0",
+  "id": 3,
+  "method": "tools/call",
+  "params": {
+    "name": "asyncgate.fail",
+    "arguments": {
+      "worker_id": "unique-worker-id",
+      "task_id": "TASK_ID",
+      "lease_id": "LEASE_ID",
+      "error": {"message": "Description of what went wrong"},
+      "retryable": true,
+      "tenant_id": "TENANT_ID"
+    }
   }
 }
 ```
@@ -146,7 +158,7 @@ Do whatever the task requires - execute commands, call APIs, process data, etc.
 1. **Create directory**: `workers/{worker_name}/`
 2. **Add manifest.yaml**: Document capabilities and schemas
 3. **Implement worker.py**:
-   - Poll `/v1/lease` with capabilities
+   - Call `asyncgate.lease_next` with capabilities
    - Parse task payload
    - Emit `accepted` receipt
    - Execute work
@@ -180,9 +192,9 @@ AsyncGate provides coordination - workers provide execution.
 
 No upfront registration. Workers declare capabilities on every lease poll. This keeps the protocol stateless and enables dynamic worker pools.
 
-### Protocol is Pure HTTP
+### Protocol is MCP HTTP
 
-Workers are just HTTP clients. They can be written in any language that can:
+Workers are MCP JSON-RPC clients. They can be written in any language that can:
 - Make HTTP requests
 - Parse JSON
 - Execute tasks
@@ -218,9 +230,9 @@ To test a worker:
 
 1. Start AsyncGate: `uvicorn src.asyncgate.main:app`
 2. Start worker: `python worker.py --asyncgate-url=... --api-key=...`
-3. Queue task: `curl -X POST .../v1/tasks -d '{task payload}'`
+3. Queue task via `asyncgate.create_task` (MCP JSON-RPC)
 4. Watch worker logs for acceptance and execution
-5. Verify receipts via `/v1/receipts` endpoint
+5. Verify receipts via `asyncgate.list_receipts_ledger` (MCP JSON-RPC)
 6. Check artifacts for output
 
 ## License

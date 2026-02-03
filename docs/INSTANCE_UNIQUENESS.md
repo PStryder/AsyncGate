@@ -170,7 +170,9 @@ ASYNCGATE_ALLOW_INSECURE_DEV=true
 
 **Check Instance ID at Runtime:**
 ```bash
-curl http://localhost:8080/v1/config
+curl -s http://localhost:8080/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"asyncgate.get_config","arguments":{"tenant_id":"TENANT_ID"}}}'
 ```
 
 ```json

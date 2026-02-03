@@ -59,7 +59,9 @@ fly postgres backup create -a asyncgate-db
 fly dashboard asyncgate
 
 # Check health
-curl https://asyncgate.fly.dev/v1/health
+curl -s https://asyncgate.fly.dev/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"asyncgate.health","arguments":{}}}'
 
 # View all checks
 fly checks list --app asyncgate

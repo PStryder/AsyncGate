@@ -63,37 +63,21 @@ ASYNCGATE_RECEIPT_RETENTION_DAYS=30
 
 ---
 
-## Public Endpoints
+## MCP Interface
 
-All endpoints mounted under `/v1/` prefix.
+AsyncGate exposes MCP over HTTP at `/mcp` with JSON-RPC methods `tools/list` and `tools/call`.
 
-### Core Operations
+### Core Tools
 
-**POST /v1/tasks**  
-Submit new task obligations. Returns task ID.
+- `asyncgate.create_task` - Submit new task obligations. Returns task ID.
+- `asyncgate.get_task` - Retrieve task metadata and current state.
+- `asyncgate.bootstrap` - Returns flat list of open obligations (no bucketing).
+- `asyncgate.list_receipts` - Query receipt ledger by principal.
+- `asyncgate.list_receipts_ledger` - Query receipt ledger with filters (task_id, type).
 
-**GET /v1/tasks/{task_id}**  
-Retrieve task metadata and current state.
+### System Tools
 
-**GET /v1/obligations/open**  
-Bootstrap endpoint: Returns flat list of all open obligations.  
-**Critical:** This MUST NOT introduce bucketing or filtering—it's a pure dump.
-
-**POST /v1/receipts**  
-Submit immutable receipt contracts. Receipts may terminate obligations.
-
-**GET /v1/receipts**  
-Query receipt ledger with filters (task_id, type, timestamp range).
-
-### System Endpoints
-
-**GET /v1/health**  
-Health check (used by Docker HEALTHCHECK and Fly.io).
-
-**Deprecated Endpoints**
-- `POST /v1/bootstrap` - Legacy, may be removed. Use `/v1/obligations/open` instead.
-
----
+- `asyncgate.health` - Health check (used by container health checks).
 
 ## Core Invariants
 
@@ -156,7 +140,7 @@ These are **intentional behaviors**, not bugs:
 - **Why:** Work completed but not retrievable = incomplete contract
 
 ### 3. Stale Bootstrap Data
-- `/v1/obligations/open` may return recently-closed tasks
+- `asyncgate.bootstrap` may return recently-closed tasks
 - Eventual consistency model (bounded by DB replication lag)
 - **Why:** O(1) performance > perfect consistency for bootstrap
 
@@ -231,23 +215,25 @@ Expected tables: `tasks`, `receipts`, `alembic_version`
 
 **Health Check**
 ```bash
-curl http://localhost:8080/v1/health
-# Expected: {"status":"healthy"}
+curl -s http://localhost:8080/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"asyncgate.health","arguments":{}}}'
 ```
 
 **Auth Test (Production)**
 ```bash
-curl -H "Authorization: Bearer $API_KEY" http://localhost:8080/v1/tasks
-# Expected: 200 OK (empty list if no tasks)
+curl -s http://localhost:8080/mcp \
+  -H "Authorization: Bearer $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"asyncgate.list_tasks","arguments":{"tenant_id":"TENANT_ID"}}}'
 ```
 
 **Bootstrap Test**
 ```bash
-curl http://localhost:8080/v1/obligations/open
-# Expected: JSON array (may be empty)
+curl -s http://localhost:8080/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"asyncgate.bootstrap","arguments":{"agent_id":"my-agent","tenant_id":"TENANT_ID"}}}'
 ```
-
----
 
 ## Debug / Introspection
 
@@ -257,13 +243,17 @@ curl http://localhost:8080/v1/obligations/open
 
 **Check Receipt Chain**
 ```bash
-curl "http://localhost:8080/v1/receipts?task_id={task_id}"
+curl -s http://localhost:8080/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"asyncgate.list_receipts_ledger","arguments":{"task_id":"TASK_ID","tenant_id":"TENANT_ID"}}}'
 # Returns all receipts for task, ordered by timestamp
 ```
 
 **Check Open Obligations**
 ```bash
-curl "http://localhost:8080/v1/obligations/open"
+curl -s http://localhost:8080/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"asyncgate.bootstrap","arguments":{"agent_id":"my-agent","tenant_id":"TENANT_ID"}}}'
 # If task appears here after success receipt, check for locatability_missing anomaly
 ```
 
@@ -292,8 +282,12 @@ alembic upgrade head
 uvicorn asyncgate.main:app --reload
 
 # 6. Test
-curl http://localhost:8000/v1/health
-curl http://localhost:8000/v1/obligations/open
+curl -s http://localhost:8000/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"asyncgate.health","arguments":{}}}'
+curl -s http://localhost:8000/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"asyncgate.bootstrap","arguments":{"agent_id":"my-agent","tenant_id":"TENANT_ID"}}}'
 ```
 
 You now understand the complete system boundary.
