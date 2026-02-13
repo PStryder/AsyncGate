@@ -31,6 +31,7 @@ async def test_task_created_at_is_timezone_aware(session: AsyncSession):
         type="test_task",
         payload={"data": "test"},
         created_by=agent,
+        principal_ai=agent.id,
     )
     
     # Verify timezone-aware
@@ -58,6 +59,7 @@ async def test_task_completed_at_is_timezone_aware(session: AsyncSession):
         type="test_task",
         payload={"data": "test"},
         created_by=agent,
+        principal_ai=agent.id,
     ))["task_id"]
     
     await session.commit()
@@ -110,6 +112,7 @@ async def test_lease_created_at_is_timezone_aware(session: AsyncSession):
         type="test_task",
         payload={"data": "test"},
         created_by=agent,
+        principal_ai=agent.id,
     )).task_id
     
     await session.commit()
@@ -146,6 +149,7 @@ async def test_lease_expires_at_is_timezone_aware(session: AsyncSession):
         type="test_task",
         payload={"data": "test"},
         created_by=agent,
+        principal_ai=agent.id,
     )).task_id
     
     await session.commit()
@@ -184,6 +188,7 @@ async def test_lease_acquired_at_is_timezone_aware(session: AsyncSession):
         type="test_task",
         payload={"data": "test"},
         created_by=agent,
+        principal_ai=agent.id,
     )).task_id
     
     await session.commit()
@@ -258,6 +263,7 @@ async def test_datetime_comparison_across_timezones(session: AsyncSession):
         type="test_task",
         payload={"data": "test"},
         created_by=agent,
+        principal_ai=agent.id,
     )
     
     # Compare with current time (should not raise TypeError)
@@ -287,6 +293,7 @@ async def test_datetime_serialization_includes_timezone(session: AsyncSession):
         type="test_task",
         payload={"data": "test"},
         created_by=agent,
+        principal_ai=agent.id,
     )
     
     # Serialize to ISO format
@@ -319,6 +326,7 @@ async def test_database_stores_timezone_correctly(session: AsyncSession):
         type="test_task",
         payload={"data": "test"},
         created_by=agent,
+        principal_ai=agent.id,
     )
     original_time = task.created_at
     

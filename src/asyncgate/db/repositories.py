@@ -62,7 +62,7 @@ class TaskRepository:
         type: str,
         payload: dict[str, Any],
         created_by: Principal,
-        principal_ai: str,
+        principal_ai: str | None = None,
         payload_pointer: str | None = None,
         requirements: TaskRequirements | None = None,
         expected_outcome_kind: str | None = None,
@@ -85,7 +85,7 @@ class TaskRepository:
 
         next_eligible_at = now + timedelta(seconds=delay_seconds) if delay_seconds else None
         resolved_payload_pointer = payload_pointer or f"inline://task/{task_id}"
-        resolved_principal_ai = principal_ai
+        resolved_principal_ai = principal_ai or created_by.instance_id or created_by.id
 
         task_row = TaskTable(
             tenant_id=tenant_id,
@@ -567,6 +567,7 @@ class LeaseRepository:
             settings.max_lease_ttl_seconds,
         )
         new_expires_at = now + timedelta(seconds=extend_by)
+        new_renewal_count = lease_row.renewal_count + 1
 
         # Update lease: increment renewal_count and extend expiry
         await self.session.execute(
@@ -574,7 +575,7 @@ class LeaseRepository:
             .where(LeaseTable.lease_id == lease_id)
             .values(
                 expires_at=new_expires_at,
-                renewal_count=LeaseTable.renewal_count + 1,  # P1.1: Increment counter
+                renewal_count=new_renewal_count,  # P1.1: Increment counter
             )
         )
 
@@ -587,7 +588,7 @@ class LeaseRepository:
             expires_at=new_expires_at,
             created_at=lease_row.created_at,
             acquired_at=lease_row.acquired_at,
-            renewal_count=lease_row.renewal_count + 1,
+            renewal_count=new_renewal_count,
         )
 
     async def release(self, tenant_id: UUID, task_id: UUID) -> bool:

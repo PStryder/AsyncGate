@@ -103,7 +103,6 @@ async def test_receipt_hash_dedupes_identical_receipts(session: AsyncSession):
     agent = Principal(kind=PrincipalKind.AGENT, id="test-agent")
     system = Principal(kind=PrincipalKind.SYSTEM, id=SYSTEM_PRINCIPAL_ID)
     service = Principal(kind=PrincipalKind.SERVICE, id=SERVICE_PRINCIPAL_ID)
-    service = Principal(kind=PrincipalKind.SERVICE, id=SERVICE_PRINCIPAL_ID)
     
     task_id = uuid4()
     parent = await receipts.create(
@@ -221,6 +220,7 @@ async def test_receipt_hash_empty_vs_no_parents(session: AsyncSession):
     tenant_id = uuid4()
     agent = Principal(kind=PrincipalKind.AGENT, id="test-agent")
     system = Principal(kind=PrincipalKind.SYSTEM, id=SYSTEM_PRINCIPAL_ID)
+    service = Principal(kind=PrincipalKind.SERVICE, id=SERVICE_PRINCIPAL_ID)
     
     task_id = uuid4()
     body = {"action": "assigned"}
@@ -269,6 +269,7 @@ async def test_receipt_hash_canonical_json(session: AsyncSession):
     tenant_id = uuid4()
     agent = Principal(kind=PrincipalKind.AGENT, id="test-agent")
     system = Principal(kind=PrincipalKind.SYSTEM, id=SYSTEM_PRINCIPAL_ID)
+    service = Principal(kind=PrincipalKind.SERVICE, id=SERVICE_PRINCIPAL_ID)
     
     task_id = uuid4()
 

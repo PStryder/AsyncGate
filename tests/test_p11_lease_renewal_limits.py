@@ -34,6 +34,7 @@ async def test_renewal_count_limit_enforced(session: AsyncSession):
         type="test_task",
         payload={"data": "test"},
         created_by=agent,
+        principal_ai=agent.id,
     )).task_id
     
     await session.commit()
@@ -93,6 +94,7 @@ async def test_absolute_lifetime_limit_enforced(session: AsyncSession):
         type="test_task",
         payload={"data": "test"},
         created_by=agent,
+        principal_ai=agent.id,
     )).task_id
     
     await session.commit()
@@ -151,6 +153,7 @@ async def test_renewal_count_increments_correctly(session: AsyncSession):
         type="test_task",
         payload={"data": "test"},
         created_by=agent,
+        principal_ai=agent.id,
     )).task_id
     
     await session.commit()
@@ -213,6 +216,7 @@ async def test_acquired_at_preserved_across_renewals(session: AsyncSession):
         type="test_task",
         payload={"data": "test"},
         created_by=agent,
+        principal_ai=agent.id,
     )).task_id
     
     await session.commit()
@@ -275,6 +279,7 @@ async def test_new_lease_after_limit_works(session: AsyncSession):
         type="test_task",
         payload={"data": "test"},
         created_by=agent,
+        principal_ai=agent.id,
     )).task_id
     
     await session.commit()
@@ -350,6 +355,7 @@ async def test_claim_and_renew_return_tracking_fields(session: AsyncSession):
         type="test_task",
         payload={"data": "test"},
         created_by=agent,
+        principal_ai=agent.id,
     ))["task_id"]
 
     await session.commit()
@@ -395,6 +401,7 @@ async def test_expire_leases_returns_without_validation_errors(session: AsyncSes
         type="test_task",
         payload={"data": "test"},
         created_by=agent,
+        principal_ai=agent.id,
     ))["task_id"]
 
     await session.commit()

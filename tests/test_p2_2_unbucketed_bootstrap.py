@@ -73,8 +73,8 @@ async def test_obligations_open_returns_flat_list(session: AsyncSession):
         # Check it's a receipt object with expected attributes
         assert hasattr(obligation, 'receipt_id'), "Each item must have receipt_id"
         assert hasattr(obligation, 'receipt_type'), "Each item must have receipt_type"
-        assert hasattr(obligation, 'from_principal'), "Each item must have from_principal"
-        assert hasattr(obligation, 'to_principal'), "Each item must have to_principal"
+        assert hasattr(obligation, 'from_'), "Each item must have from_ principal"
+        assert hasattr(obligation, 'to_'), "Each item must have to_ principal"
         
         # Verify it's NOT a bucket/group structure
         assert not isinstance(obligation, dict) or 'items' not in obligation, \

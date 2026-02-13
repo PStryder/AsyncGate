@@ -105,7 +105,7 @@ async def client(session):
     app.dependency_overrides[verify_api_key] = override_verify_api_key
     app.dependency_overrides[rate_limit_dependency] = override_rate_limit
 
-    transport = ASGITransport(app=app, lifespan="off")
+    transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         yield client
 

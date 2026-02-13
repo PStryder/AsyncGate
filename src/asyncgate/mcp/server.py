@@ -334,6 +334,8 @@ async def _handle_tool(name: str, arguments: dict[str, Any]) -> Any:
 
         # TASKER tools
         if name == "asyncgate.bootstrap":
+            from asyncgate.config import settings
+
             principal = Principal(
                 kind=PrincipalKind.AGENT,
                 id=arguments["agent_id"],
@@ -350,10 +352,8 @@ async def _handle_tool(name: str, arguments: dict[str, Any]) -> Any:
                 tenant_id=UUID(arguments["tenant_id"]),
                 principal=principal,
                 since_receipt_id=UUID(arguments["since_receipt_id"]) if arguments.get("since_receipt_id") else None,
-                limit=arguments.get("max_items"),
+                limit=arguments.get("max_items") or settings.default_bootstrap_max_items,
             )
-
-            from asyncgate.config import settings
 
             return {
                 "server": {

@@ -33,6 +33,7 @@ async def test_task_result_has_timezone_aware_datetime(session: AsyncSession):
         type="test_task",
         payload={"data": "test"},
         created_by=agent,
+        principal_ai=agent.id,
     ))["task_id"]
     
     await session.commit()
@@ -94,6 +95,7 @@ async def test_failed_task_has_timezone_aware_datetime(session: AsyncSession):
         type="test_task",
         payload={"data": "test"},
         created_by=agent,
+        principal_ai=agent.id,
         max_attempts=1,  # No retries
     ))["task_id"]
     
@@ -152,6 +154,7 @@ async def test_datetime_comparison_works_correctly(session: AsyncSession):
         type="test_task",
         payload={"data": "test"},
         created_by=agent,
+        principal_ai=agent.id,
     ))["task_id"]
     
     await session.commit()
@@ -189,6 +192,7 @@ async def test_timezone_info_preserved_through_db_roundtrip(session: AsyncSessio
         type="test_task",
         payload={"data": "test"},
         created_by=agent,
+        principal_ai=agent.id,
     ))["task_id"]
     
     await session.commit()
@@ -217,7 +221,7 @@ async def test_timezone_info_preserved_through_db_roundtrip(session: AsyncSessio
     await session.commit()
     
     # Retrieve from database in fresh query
-    await session.expire_all()  # Clear session cache
+    session.expire_all()  # Clear session cache
     task = await engine.tasks.get(tenant_id, task_id)
     
     # Verify timezone preserved

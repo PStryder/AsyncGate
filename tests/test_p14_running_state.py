@@ -74,6 +74,7 @@ async def test_start_task_sets_running_and_emits_receipt(session: AsyncSession):
         type="test_task",
         payload={"data": "test"},
         created_by=agent,
+        principal_ai=agent.id,
     ))["task_id"]
     await session.commit()
 
@@ -131,6 +132,7 @@ async def test_report_progress_transitions_to_running(session: AsyncSession):
         type="test_task",
         payload={"data": "test"},
         created_by=agent,
+        principal_ai=agent.id,
     ))["task_id"]
     await session.commit()
 
@@ -177,6 +179,7 @@ async def test_start_task_requires_valid_lease(session: AsyncSession):
         type="test_task",
         payload={"data": "test"},
         created_by=agent,
+        principal_ai=agent.id,
     ))["task_id"]
     await session.commit()
 
@@ -202,6 +205,7 @@ async def test_lease_expiry_clears_started_at(session: AsyncSession):
         type="test_task",
         payload={"data": "test"},
         created_by=agent,
+        principal_ai=agent.id,
     ))["task_id"]
     await session.commit()
 

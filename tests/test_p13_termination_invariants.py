@@ -27,6 +27,7 @@ async def test_cancel_emits_terminal_receipt_and_closes(session: AsyncSession):
         type="test_task",
         payload={"data": "test"},
         created_by=agent,
+        principal_ai=agent.id,
     ))["task_id"]
 
     await session.commit()
