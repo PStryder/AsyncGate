@@ -68,7 +68,7 @@ jobs:
 
       - name: Run tests with coverage gate
         run: |
-          pytest -q --maxfail=1 \
+          pytest --asyncio-mode=auto -q --maxfail=1 \
             --cov=asyncgate \
             --cov-report=term \
             --cov-fail-under=40
