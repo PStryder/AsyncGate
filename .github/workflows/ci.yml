@@ -33,12 +33,22 @@ jobs:
       ASYNCGATE_TEST_DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/asyncgate_test
       ASYNCGATE_ALLOW_INSECURE_DEV: "true"
       ASYNCGATE_API_KEY: "ci-test-key"
+      # Canonical receipt schema, checked out below. Without this the receipt
+      # contract tests skip instead of running.
+      LEGIVELLUM_RECEIPT_SCHEMA: ${{ github.workspace }}/_legivellum/docs/canonical/receipt.schema.v1.json
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Checkout LegiVellum (canonical receipt schema)
+        uses: actions/checkout@v4
+        with:
+          repository: PStryder/LegiVellum
+          path: _legivellum
+          fetch-depth: 1
 
       - name: Setup Python
         uses: actions/setup-python@v5
