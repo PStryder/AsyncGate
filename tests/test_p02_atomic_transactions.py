@@ -35,6 +35,7 @@ async def test_complete_atomicity_receipt_failure_rollsback(session: AsyncSessio
         type="test_task",
         payload={"data": "test"},
         created_by=agent,
+        principal_ai=agent.id,
     ))["task_id"]
     
     await session.commit()
@@ -112,6 +113,7 @@ async def test_fail_atomicity_requeue_path(session: AsyncSession):
         type="test_task",
         payload={"data": "test"},
         created_by=agent,
+        principal_ai=agent.id,
         max_attempts=3,  # Allow retries
     ))["task_id"]
     
@@ -181,6 +183,7 @@ async def test_cancel_atomicity(session: AsyncSession):
         type="test_task",
         payload={"data": "test"},
         created_by=agent,
+        principal_ai=agent.id,
     ))["task_id"]
     
     await session.commit()
@@ -228,6 +231,7 @@ async def test_expire_leases_atomicity(session: AsyncSession):
         type="test_task",
         payload={"data": "test"},
         created_by=agent,
+        principal_ai=agent.id,
     ))["task_id"]
     
     await session.commit()
@@ -291,6 +295,7 @@ async def test_complete_success_all_committed(session: AsyncSession):
         type="test_task",
         payload={"data": "test"},
         created_by=agent,
+        principal_ai=agent.id,
     ))["task_id"]
     
     await session.commit()
@@ -362,6 +367,7 @@ async def test_fail_terminal_atomicity(session: AsyncSession):
         type="test_task",
         payload={"data": "test"},
         created_by=agent,
+        principal_ai=agent.id,
         max_attempts=1,  # No retries
     ))["task_id"]
     

@@ -79,7 +79,6 @@ jobs:
       - name: Run tests with coverage gate
         run: |
           pytest --asyncio-mode=auto -q --maxfail=1 \
-            --ignore=tests/test_p02_atomic_transactions.py \
             --cov=asyncgate \
             --cov-report=term \
             --cov-fail-under=40
