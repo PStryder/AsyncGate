@@ -63,6 +63,28 @@ class Settings(BaseSettings):
     # Receipt mode
     receipt_mode: ReceiptMode = ReceiptMode.STANDALONE
 
+    # MetaGate bootstrap. Optional by design: MetaGate is a describe-only,
+    # non-blocking authority, so an unset endpoint simply means "use the values
+    # configured here" rather than a misconfiguration.
+    metagate_endpoint: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "ASYNCGATE_METAGATE_ENDPOINT",
+            "ASYNCGATE_METAGATE_URL",
+            "METAGATE_ENDPOINT",
+            "METAGATE_URL",
+        ),
+    )
+    metagate_api_key: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "ASYNCGATE_METAGATE_API_KEY",
+            "METAGATE_API_KEY",
+        ),
+    )
+    metagate_component_key: str = "asyncgate"
+    metagate_bootstrap_timeout_seconds: float = 5.0
+
     # ReceiptGate integration (only used if receipt_mode = RECEIPTGATE_INTEGRATED)
     receiptgate_endpoint: Optional[str] = Field(
         default=None,

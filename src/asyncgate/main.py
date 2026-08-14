@@ -12,7 +12,11 @@ from asyncgate.api.deps import validate_auth_config
 from asyncgate.config import settings
 from asyncgate.db.base import close_db, init_db
 from asyncgate.instance import detect_instance_id, validate_instance_uniqueness
-from asyncgate.integrations import shutdown_receiptgate_client
+from asyncgate.integrations import (
+    acknowledge_startup,
+    bootstrap_from_metagate,
+    shutdown_receiptgate_client,
+)
 from asyncgate.middleware.trace import trace_id_middleware
 from asyncgate.mcp.http import router as mcp_router
 from asyncgate.tasks.sweep import start_lease_sweep, stop_lease_sweep
@@ -42,6 +46,14 @@ async def lifespan(app: FastAPI):
     validate_instance_uniqueness(settings.instance_id, settings.env.value)
     
     logger.info(f"Environment: {settings.env.value}")
+
+    # Resolve peer endpoints from MetaGate before anything that depends on them.
+    # Deliberately best-effort: a failure here must never prevent startup, or
+    # the bootstrap authority becomes a hidden master.
+    bootstrap_result = await bootstrap_from_metagate(settings)
+    if bootstrap_result.succeeded:
+        await acknowledge_startup(settings, bootstrap_result)
+
     logger.info(f"Receipt mode: {settings.receipt_mode.value}")
 
     # Validate authentication configuration (fail fast if insecure)

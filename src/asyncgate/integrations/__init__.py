@@ -12,6 +12,11 @@ from asyncgate.integrations.memorygate_client import (
     get_receiptgate_client,
     shutdown_receiptgate_client,
 )
+from .metagate_client import (
+    BootstrapResult,
+    acknowledge_startup,
+    bootstrap_from_metagate,
+)
 
 __all__ = [
     "CircuitBreaker",
@@ -22,4 +27,7 @@ __all__ = [
     "ReceiptGateClient",
     "get_receiptgate_client",
     "shutdown_receiptgate_client",
+    "BootstrapResult",
+    "acknowledge_startup",
+    "bootstrap_from_metagate",
 ]
