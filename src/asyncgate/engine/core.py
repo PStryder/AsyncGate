@@ -1259,15 +1259,22 @@ class AsyncGateEngine:
         elif parents:
             obligation_id = str(parents[0])
 
+        # stdlib logging takes structured fields via `extra`, not kwargs. Passing
+        # them as kwargs raised TypeError on every single receipt emission.
         logger.info(
-            "receipt_emitted",
-            receipt_id=str(receipt.receipt_id),
-            receipt_type=receipt_type.value,
-            task_id=str(task_id) if task_id else None,
-            lease_id=str(lease_id) if lease_id else None,
-            obligation_id=obligation_id,
-            parents=[str(parent) for parent in parents] if parents else [],
-            trace_id=get_trace_id(),
+            "receipt_emitted receipt_id=%s receipt_type=%s task_id=%s",
+            receipt.receipt_id,
+            receipt_type.value,
+            task_id,
+            extra={
+                "receipt_id": str(receipt.receipt_id),
+                "receipt_type": receipt_type.value,
+                "task_id": str(task_id) if task_id else None,
+                "lease_id": str(lease_id) if lease_id else None,
+                "obligation_id": obligation_id,
+                "parents": [str(parent) for parent in parents] if parents else [],
+                "trace_id": get_trace_id(),
+            },
         )
 
         if settings.receipt_mode == ReceiptMode.RECEIPTGATE_INTEGRATED and settings.receiptgate_endpoint:
