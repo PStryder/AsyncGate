@@ -51,7 +51,7 @@ async def lifespan(app: FastAPI):
     # Deliberately best-effort: a failure here must never prevent startup, or
     # the bootstrap authority becomes a hidden master.
     bootstrap_result = await bootstrap_from_metagate(settings)
-    if bootstrap_result.succeeded:
+    if bootstrap_result is not None and bootstrap_result.succeeded:
         await acknowledge_startup(settings, bootstrap_result)
 
     logger.info(f"Receipt mode: {settings.receipt_mode.value}")
