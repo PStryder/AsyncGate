@@ -162,6 +162,7 @@ Environment variables (prefix `ASYNCGATE_`):
 | `RECEIPTGATE_AUTH_TOKEN` | - | ReceiptGate auth token/API key (accepts RECEIPTGATE_API_KEY alias) |
 | `RECEIPTGATE_TENANT_ID` | - | Tenant ID to stamp in ReceiptGate receipts |
 | `RECEIPTGATE_EMISSION_TIMEOUT_MS` | 500 | ReceiptGate request timeout (ms) |
+| `RECEIPTGATE_EMISSION_BUFFER_PATH` | .asyncgate/receiptgate_emission_buffer.json | Durable local buffer file for failed receipt emissions |
 | `RECEIPTGATE_EMISSION_MAX_RETRIES` | 10 | ReceiptGate retry count |
 | `RECEIPTGATE_CIRCUIT_BREAKER_ENABLED` | true | Enable circuit breaker |
 | `ESCALATION_ENABLED` | false | Emit escalation receipts |

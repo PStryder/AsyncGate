@@ -12,6 +12,7 @@ from asyncgate.api.deps import validate_auth_config
 from asyncgate.config import settings
 from asyncgate.db.base import close_db, init_db
 from asyncgate.instance import detect_instance_id, validate_instance_uniqueness
+from asyncgate.integrations import shutdown_receiptgate_client
 from asyncgate.middleware.trace import trace_id_middleware
 from asyncgate.mcp.http import router as mcp_router
 from asyncgate.tasks.sweep import start_lease_sweep, stop_lease_sweep
@@ -59,6 +60,7 @@ async def lifespan(app: FastAPI):
     # Cleanup
     logger.info("Shutting down AsyncGate server...")
     await stop_lease_sweep()
+    await shutdown_receiptgate_client()
     await close_db()
     logger.info("Shutdown complete")
 

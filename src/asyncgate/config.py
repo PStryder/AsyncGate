@@ -85,6 +85,7 @@ class Settings(BaseSettings):
     receiptgate_tenant_id: Optional[str] = None
     receiptgate_emission_timeout_ms: int = 500
     receiptgate_emission_buffer_size: int = 10000
+    receiptgate_emission_buffer_path: str = ".asyncgate/receiptgate_emission_buffer.json"
     receiptgate_emission_retry_interval_seconds: int = 30
     receiptgate_emission_max_retries: int = 10
 

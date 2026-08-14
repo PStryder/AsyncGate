@@ -1089,13 +1089,22 @@ class AsyncGateEngine:
 
     async def get_config(self) -> dict[str, Any]:
         """Return operational configuration."""
-        return {
+        config: dict[str, Any] = {
             "receipt_mode": settings.receipt_mode.value,
             "receiptgate_endpoint": settings.receiptgate_endpoint,
             "instance_id": settings.instance_id,
             "capabilities": ["lease_based_execution", "receipt_emission"],
             "version": "0.1.0",
         }
+
+        if settings.receipt_mode == ReceiptMode.RECEIPTGATE_INTEGRATED:
+            client = get_receiptgate_client()
+            config["receiptgate_delivery"] = {
+                "circuit": client.get_circuit_stats(),
+                "buffer": client.get_buffer_stats(),
+            }
+
+        return config
 
     async def get_metrics_snapshot(self, tenant_id: UUID) -> dict[str, Any]:
         """Return metrics snapshot with queue size gauges."""
