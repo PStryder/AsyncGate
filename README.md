@@ -138,6 +138,12 @@ TASKEE tools:
 System:
 - `asyncgate.get_config`
 - `asyncgate.health`
+- `asyncgate.check_terminator` — check for termination evidence on a receipt.
+  Takes `parent_receipt_id` and `tenant_id`, and answers whether the obligation
+  that receipt opened has been closed, so a caller can tell an outstanding
+  obligation from one whose closure it simply has not seen.
+
+That is the full set reported by `tools/list`.
 
 ## Configuration
 
