@@ -14,6 +14,7 @@ from typing import Any
 # pyproject) and a missing one must stop the process, not silently disable
 # validation.
 from legivellum.models import Receipt as CanonicalReceipt
+from legivellum.ulid import derive_ulid
 
 from asyncgate.models import Principal, Receipt, ReceiptType, Task
 from asyncgate.models.enums import Outcome
@@ -219,6 +220,17 @@ def to_memorygate_receipt(receipt: Receipt, task: Task | None) -> dict[str, Any]
         "tenant_id": str(receipt.tenant_id),
         "receipt_id": str(receipt.receipt_id),
         "task_id": str(receipt.task_id) if receipt.task_id else "NA",
+        # AsyncGate owns one obligation per task, opened by task.assigned and
+        # closed by a terminal receipt. Derived rather than minted because the
+        # opening and closing receipts are produced by different engine
+        # operations; every receipt for a task therefore names the same
+        # obligation, and a terminal receipt for a DIFFERENT task can no longer
+        # close this one by sharing a task_id.
+        "obligation_id": (
+            derive_ulid("asyncgate.task", str(receipt.task_id))
+            if receipt.task_id
+            else derive_ulid("asyncgate.receipt", str(receipt.receipt_id))
+        ),
         "parent_task_id": "NA",
         "caused_by_receipt_id": caused_by,
         "dedupe_key": receipt.hash or "NA",
