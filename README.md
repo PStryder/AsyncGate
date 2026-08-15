@@ -141,39 +141,103 @@ System:
 
 ## Configuration
 
-Environment variables (prefix `ASYNCGATE_`):
+Environment variables (prefix `ASYNCGATE_`). Generated from the `Settings`
+class; MetaGate bootstrap variables are documented in their own section below.
+
+`ASYNCGATE_API_KEY` is **required** outside the `development` environment; startup fails without it. `ASYNCGATE_ALLOW_INSECURE_DEV=true` disables auth checks and is for local development only.
+
+See `.env.example` for a working starting point.
+
+### Server
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `DATABASE_URL` | postgresql+asyncpg://... | PostgreSQL connection URL |
-| `REDIS_URL` | - | Redis URL for rate limiting |
-| `ENV` | development | Environment (development/staging/production) |
-| `INSTANCE_ID` | asyncgate-1 | Instance identifier |
-| `LOG_LEVEL` | INFO | Logging level |
-| `DEBUG` | false | Debug mode |
-| `DEFAULT_LEASE_TTL_SECONDS` | 120 | Default lease TTL |
-| `MAX_LEASE_TTL_SECONDS` | 1800 | Maximum lease TTL (30 min) |
-| `MAX_LEASE_RENEWALS` | 10 | Maximum lease renewals before forced release |
-| `MAX_LEASE_LIFETIME_SECONDS` | 7200 | Absolute max lease lifetime (2 hours) |
-| `DEFAULT_MAX_ATTEMPTS` | 2 | Default max retry attempts |
-| `DEFAULT_RETRY_BACKOFF_SECONDS` | 15 | Default retry backoff |
-| `RECEIPT_MODE` | standalone | Receipt storage mode (standalone/receiptgate_integrated) |
-| `RECEIPTGATE_ENDPOINT` | - | ReceiptGate MCP endpoint URL (accepts RECEIPTGATE_URL alias) |
-| `RECEIPTGATE_AUTH_TOKEN` | - | ReceiptGate auth token/API key (accepts RECEIPTGATE_API_KEY alias) |
-| `RECEIPTGATE_TENANT_ID` | - | Tenant ID to stamp in ReceiptGate receipts |
-| `RECEIPTGATE_EMISSION_TIMEOUT_MS` | 500 | ReceiptGate request timeout (ms) |
-| `RECEIPTGATE_EMISSION_BUFFER_PATH` | .asyncgate/receiptgate_emission_buffer.json | Durable local buffer file for failed receipt emissions |
-| `RECEIPTGATE_EMISSION_MAX_RETRIES` | 10 | ReceiptGate retry count |
-| `RECEIPTGATE_CIRCUIT_BREAKER_ENABLED` | true | Enable circuit breaker |
-| `ESCALATION_ENABLED` | false | Emit escalation receipts |
-| `ESCALATION_TARGETS` | - | JSON array of escalation targets |
-| `ESCALATION_LEASE_EXPIRY_CLASS` | 1 | Escalation class for lease expiry |
-| `API_KEY` | - | API key for authentication |
-| `ALLOW_INSECURE_DEV` | false | Allow unauthenticated in dev mode |
-| `RATE_LIMIT_ENABLED` | true | Enable rate limiting |
-| `RATE_LIMIT_BACKEND` | memory | Rate limit backend (memory/redis) |
-| `RATE_LIMIT_DEFAULT_CALLS` | 100 | Default calls per window |
-| `RATE_LIMIT_DEFAULT_WINDOW_SECONDS` | 60 | Rate limit window size |
+| `ASYNCGATE_DEBUG` | `false` | Enable debug mode |
+| `ASYNCGATE_ENV` | `development` | Deployment environment: `development`, `staging` or `production` |
+| `ASYNCGATE_HOST` | `0.0.0.0` | Bind address |
+| `ASYNCGATE_INSTANCE_ID` | `asyncgate-1` | Unique instance identifier (auto-detected at startup if not set) |
+| `ASYNCGATE_LOG_LEVEL` | `INFO` | Logging verbosity |
+| `ASYNCGATE_PORT` | `8080` | Bind port |
+
+### Database
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ASYNCGATE_DATABASE_URL` | `postgresql+asyncpg://asyncgate:asyncgate@localhost:5432/asyncgate` | PostgreSQL connection string |
+| `ASYNCGATE_REDIS_URL` | *(unset)* | Redis connection used for distributed rate limiting; an in-process limiter is used when unset |
+
+### Authentication
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ASYNCGATE_ALLOW_INSECURE_DEV` | `false` | Allow unauthenticated in dev |
+| `ASYNCGATE_API_KEY` | *(unset)* | API key for MCP requests |
+| `ASYNCGATE_JWT_ACCESS_TOKEN_TTL_DAYS` | `30` | Access token lifetime |
+| `ASYNCGATE_JWT_ALGORITHM` | `RS256` | JWT signing algorithm |
+| `ASYNCGATE_JWT_PRIVATE_KEY_PATH` | *(unset)* | Path to the JWT signing key |
+| `ASYNCGATE_JWT_PUBLIC_KEY_PATH` | *(unset)* | Path to the JWT verification key |
+| `ASYNCGATE_JWT_REFRESH_TOKEN_TTL_DAYS` | `90` | Refresh token lifetime |
+
+### Upstream services
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ASYNCGATE_RECEIPT_MODE` | `standalone` | `standalone` keeps receipts locally; `receiptgate_integrated` emits them to ReceiptGate |
+| `ASYNCGATE_RECEIPTGATE_AUTH_TOKEN` | *(unset)* | Auth token presented to ReceiptGate. Also accepts `ASYNCGATE_RECEIPTGATE_API_KEY`, `RECEIPTGATE_AUTH_TOKEN`, `RECEIPTGATE_API_KEY` |
+| `ASYNCGATE_RECEIPTGATE_CIRCUIT_BREAKER_ENABLED` | `true` | Enable circuit breaker for ReceiptGate calls |
+| `ASYNCGATE_RECEIPTGATE_CIRCUIT_BREAKER_FAILURE_THRESHOLD` | `5` | Failures before opening circuit |
+| `ASYNCGATE_RECEIPTGATE_CIRCUIT_BREAKER_HALF_OPEN_MAX_CALLS` | `3` | Test calls in half-open state |
+| `ASYNCGATE_RECEIPTGATE_CIRCUIT_BREAKER_SUCCESS_THRESHOLD` | `2` | Successes to close from half-open |
+| `ASYNCGATE_RECEIPTGATE_CIRCUIT_BREAKER_TIMEOUT_SECONDS` | `60` | Seconds before attempting half-open |
+| `ASYNCGATE_RECEIPTGATE_EMISSION_BUFFER_PATH` | `.asyncgate/receiptgate_emission_buffer.json` | Where the buffer is persisted, so buffered receipts survive a restart |
+| `ASYNCGATE_RECEIPTGATE_EMISSION_BUFFER_SIZE` | `10000` | Maximum receipts held while ReceiptGate is unreachable |
+| `ASYNCGATE_RECEIPTGATE_EMISSION_MAX_RETRIES` | `10` | Replay attempts before a buffered receipt is given up on |
+| `ASYNCGATE_RECEIPTGATE_EMISSION_RETRY_INTERVAL_SECONDS` | `30` | How often buffered receipts are replayed |
+| `ASYNCGATE_RECEIPTGATE_EMISSION_TIMEOUT_MS` | `500` | Per-emission timeout |
+| `ASYNCGATE_RECEIPTGATE_ENDPOINT` | *(unset)* | ReceiptGate MCP endpoint. Only used when `receipt_mode=receiptgate_integrated`. Also accepts `ASYNCGATE_RECEIPTGATE_URL`, `RECEIPTGATE_ENDPOINT`, `RECEIPTGATE_URL` |
+| `ASYNCGATE_RECEIPTGATE_TENANT_ID` | *(unset)* | Tenant for receipt writes |
+
+### Rate limiting
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ASYNCGATE_RATE_LIMIT_BACKEND` | `memory` | Rate limit backend: memory or redis |
+| `ASYNCGATE_RATE_LIMIT_DEFAULT_CALLS` | `100` | Default calls per window |
+| `ASYNCGATE_RATE_LIMIT_DEFAULT_WINDOW_SECONDS` | `60` | Default window size in seconds |
+| `ASYNCGATE_RATE_LIMIT_ENABLED` | `true` | Enable rate limiting |
+
+### CORS
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ASYNCGATE_CORS_ALLOW_CREDENTIALS` | `true` | Allow credentials in CORS requests |
+| `ASYNCGATE_CORS_ALLOWED_HEADERS` | `['Authorization', 'Content-Type', 'X-Tenant-ID', 'X-Trace-ID', 'X-Request-ID']` | Allowed request headers |
+| `ASYNCGATE_CORS_ALLOWED_METHODS` | `['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']` | Allowed HTTP methods |
+| `ASYNCGATE_CORS_ALLOWED_ORIGINS` | `['http://localhost:3000', 'http://localhost:8080']` | Allowed CORS origins (explicit allowlist for security) |
+
+### Behaviour and limits
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ASYNCGATE_DEFAULT_BOOTSTRAP_MAX_ITEMS` | `50` | Default bootstrap items |
+| `ASYNCGATE_DEFAULT_LEASE_TTL_SECONDS` | `120` | Default lease TTL (2 min) |
+| `ASYNCGATE_DEFAULT_LIST_LIMIT` | `50` | Default list limit |
+| `ASYNCGATE_DEFAULT_MAX_ATTEMPTS` | `2` | Default max task attempts |
+| `ASYNCGATE_DEFAULT_PRIORITY` | `0` | Default task priority |
+| `ASYNCGATE_DEFAULT_RETRY_BACKOFF_SECONDS` | `15` | Default retry backoff |
+| `ASYNCGATE_ESCALATION_ENABLED` | `false` | Enable escalation receipts |
+| `ASYNCGATE_ESCALATION_LEASE_EXPIRY_CLASS` | `1` | Escalation class to use for lease expiry events |
+| `ASYNCGATE_ESCALATION_TARGETS` | *(empty)* | Escalation targets keyed by class |
+| `ASYNCGATE_LEASE_GRACE_SECONDS` | `0` | Lease grace period |
+| `ASYNCGATE_LEASE_SWEEP_INTERVAL_SECONDS` | `5` | Lease sweep cadence |
+| `ASYNCGATE_MAX_BOOTSTRAP_MAX_ITEMS` | `200` | Max bootstrap items |
+| `ASYNCGATE_MAX_LEASE_LIFETIME_SECONDS` | `7200` | Absolute maximum lifetime for a lease (acquired_at to now) |
+| `ASYNCGATE_MAX_LEASE_RENEWALS` | `10` | Maximum times a lease can be renewed before forcing release |
+| `ASYNCGATE_MAX_LEASE_TTL_SECONDS` | `1800` | Max lease TTL (30 min) |
+| `ASYNCGATE_MAX_LIST_LIMIT` | `200` | Max list limit |
+| `ASYNCGATE_MAX_RETRY_BACKOFF_SECONDS` | `900` | Max retry backoff (15 min) |
+| `ASYNCGATE_RECEIPT_RETENTION_DAYS` | `30` | Active receipt retention |
+| `ASYNCGATE_TASK_RETENTION_DAYS` | `7` | Terminal task retention |
 
 ## Task Lifecycle
 
