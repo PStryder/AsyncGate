@@ -2,6 +2,13 @@
 
 **Purpose:** AI workspace for session continuity and working files
 
+Files here are **point-in-time session artifacts**, not project documentation.
+They record what was true when written and are not maintained afterwards, so
+file paths, module names and line numbers in them may no longer resolve, and
+findings may have been fixed or superseded since. For current guidance read
+`README.md`, `docs/`, and the canonical contracts in
+`LegiVellum/docs/canonical/`.
+
 ## What goes here:
 
 - **Session notes** (SESSION_SUMMARY.md, etc.)
