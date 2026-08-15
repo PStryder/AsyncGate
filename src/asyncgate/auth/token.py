@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import secrets
-from typing import Optional
 
 from jose import JWTError, jwt
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,7 +12,7 @@ from asyncgate.auth.middleware import API_KEY_PREFIX, verify_request_api_key
 from asyncgate.config import Environment, settings
 from asyncgate.engine.errors import UnauthorizedError
 
-_jwt_key_cache: Optional[str] = None
+_jwt_key_cache: str | None = None
 
 
 def _looks_like_jwt(token: str) -> bool:
@@ -26,12 +25,12 @@ def _load_jwt_key() -> str:
         return _jwt_key_cache
 
     if settings.jwt_public_key_path:
-        with open(settings.jwt_public_key_path, "r", encoding="utf-8") as handle:
+        with open(settings.jwt_public_key_path, encoding="utf-8") as handle:
             _jwt_key_cache = handle.read()
             return _jwt_key_cache
 
     if settings.jwt_private_key_path:
-        with open(settings.jwt_private_key_path, "r", encoding="utf-8") as handle:
+        with open(settings.jwt_private_key_path, encoding="utf-8") as handle:
             _jwt_key_cache = handle.read()
             return _jwt_key_cache
 

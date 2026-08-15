@@ -4,13 +4,12 @@ Authentication Models for AsyncGate
 User and API key models adapted from MemoryGate pattern.
 """
 
-from datetime import datetime, timedelta
-from typing import Optional
-from sqlalchemy import Column, String, DateTime, Boolean, Integer, ForeignKey, Index
-from sqlalchemy.orm import relationship
-from sqlalchemy.dialects.postgresql import UUID, JSONB
 import uuid
-import secrets
+from datetime import datetime
+
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Index, Integer, String
+from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.orm import relationship
 
 from asyncgate.db.base import Base
 

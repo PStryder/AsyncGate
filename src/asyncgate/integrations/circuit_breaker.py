@@ -2,10 +2,11 @@
 
 import asyncio
 import logging
-from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from collections.abc import Callable
+from dataclasses import dataclass
+from datetime import datetime
 from enum import Enum
-from typing import Any, Callable, Optional, TypeVar
+from typing import Any, TypeVar
 
 from asyncgate.utils.time import utc_now
 
@@ -30,11 +31,11 @@ class CircuitBreakerConfig:
     timeout_seconds: int = 60  # Time before attempting half-open
     half_open_max_calls: int = 3  # Test calls in half-open state
     success_threshold: int = 2  # Successes to close from half-open
-    
+
     # Callback hooks (optional)
-    on_open: Optional[Callable[[], None]] = None
-    on_close: Optional[Callable[[], None]] = None
-    on_half_open: Optional[Callable[[], None]] = None
+    on_open: Callable[[], None] | None = None
+    on_close: Callable[[], None] | None = None
+    on_half_open: Callable[[], None] | None = None
 
 
 @dataclass
@@ -44,8 +45,8 @@ class CircuitBreakerStats:
     state: CircuitState
     failure_count: int = 0
     success_count: int = 0
-    last_failure_time: Optional[datetime] = None
-    opened_at: Optional[datetime] = None
+    last_failure_time: datetime | None = None
+    opened_at: datetime | None = None
     half_open_calls: int = 0
     total_calls: int = 0
     total_failures: int = 0
@@ -66,13 +67,13 @@ class CircuitBreakerOpen(Exception):
 class CircuitBreaker:
     """
     Generic circuit breaker for external service calls.
-    
+
     State transitions:
     - CLOSED → OPEN: After failure_threshold consecutive failures
     - OPEN → HALF_OPEN: After timeout_seconds elapsed
     - HALF_OPEN → CLOSED: After success_threshold consecutive successes
     - HALF_OPEN → OPEN: On any failure
-    
+
     Thread-safe via asyncio locks.
     """
 
@@ -107,21 +108,21 @@ class CircuitBreaker:
         self,
         func: Callable[..., Any],
         *args: Any,
-        fallback: Optional[Callable[..., Any]] = None,
+        fallback: Callable[..., Any] | None = None,
         **kwargs: Any,
     ) -> Any:
         """
         Execute function through circuit breaker.
-        
+
         Args:
             func: Async function to call
             *args: Positional arguments for func
             fallback: Optional fallback function if circuit is open
             **kwargs: Keyword arguments for func
-            
+
         Returns:
             Result from func or fallback
-            
+
         Raises:
             CircuitBreakerOpen: If circuit is open and no fallback provided
             Exception: Any exception from func (after recording)
@@ -137,8 +138,10 @@ class CircuitBreaker:
                     # Circuit still open, fail fast
                     if fallback:
                         logger.debug(f"Circuit {self.name} open, using fallback")
-                        return await fallback(*args, **kwargs) if asyncio.iscoroutinefunction(fallback) else fallback(*args, **kwargs)
-                    
+                        if asyncio.iscoroutinefunction(fallback):
+                            return await fallback(*args, **kwargs)
+                        return fallback(*args, **kwargs)
+
                     retry_after = self._seconds_until_half_open()
                     raise CircuitBreakerOpen(self.name, retry_after)
 
@@ -150,7 +153,9 @@ class CircuitBreaker:
                         f"rejecting call"
                     )
                     if fallback:
-                        return await fallback(*args, **kwargs) if asyncio.iscoroutinefunction(fallback) else fallback(*args, **kwargs)
+                        if asyncio.iscoroutinefunction(fallback):
+                            return await fallback(*args, **kwargs)
+                        return fallback(*args, **kwargs)
                     raise CircuitBreakerOpen(
                         self.name,
                         self._seconds_until_half_open(),

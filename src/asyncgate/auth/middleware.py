@@ -5,15 +5,13 @@ Provides authentication via API keys (headers).
 Async-compatible version of MemoryGate auth pattern.
 """
 
-from typing import Optional
-import bcrypt
 import secrets
 
+import bcrypt
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from asyncgate.auth.models import User, APIKey
-
+from asyncgate.auth.models import APIKey, User
 
 # API key prefix for AsyncGate
 API_KEY_PREFIX = "ag_"
@@ -41,7 +39,7 @@ def generate_api_key() -> tuple[str, str, str]:
     return full_key, prefix, key_hash
 
 
-async def verify_request_api_key(db: AsyncSession, headers: dict) -> Optional[User]:
+async def verify_request_api_key(db: AsyncSession, headers: dict) -> User | None:
     """
     Verify API key from request headers (async version).
 

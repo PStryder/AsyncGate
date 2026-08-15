@@ -1,7 +1,7 @@
 """Task model - core work unit."""
 
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -21,9 +21,9 @@ class TaskResult(BaseModel):
     """Terminal outcome of a task."""
 
     outcome: Outcome
-    result: Optional[dict[str, Any]] = None
-    error: Optional[dict[str, Any]] = None
-    artifacts: Optional[list[dict[str, Any]] | dict[str, Any]] = None
+    result: dict[str, Any] | None = None
+    error: dict[str, Any] | None = None
+    artifacts: list[dict[str, Any]] | dict[str, Any] | None = None
     completed_at: datetime
 
 
@@ -38,7 +38,7 @@ class Task(BaseModel):
     type: str
     # NOTE: payload is legacy inline data; prefer payload_pointer for LegiVellum compliance.
     payload: dict[str, Any] = Field(default_factory=dict)
-    payload_pointer: Optional[str] = None
+    payload_pointer: str | None = None
 
     # Ownership (immutable after creation)
     created_by: Principal
@@ -60,23 +60,23 @@ class Task(BaseModel):
     retry_backoff_seconds: int = 30
 
     # Idempotency
-    idempotency_key: Optional[str] = None
+    idempotency_key: str | None = None
 
     # Timestamps
     created_at: datetime
     updated_at: datetime
-    next_eligible_at: Optional[datetime] = None
-    started_at: Optional[datetime] = None
+    next_eligible_at: datetime | None = None
+    started_at: datetime | None = None
 
     # Result (populated when terminal)
-    result: Optional[TaskResult] = None
+    result: TaskResult | None = None
 
     # Expected outcome metadata (for receipt shaping)
-    expected_outcome_kind: Optional[str] = None
-    expected_artifact_mime: Optional[str] = None
+    expected_outcome_kind: str | None = None
+    expected_artifact_mime: str | None = None
 
     # AsyncGate instance ownership (for multi-instance deployments)
-    asyncgate_instance: Optional[str] = None
+    asyncgate_instance: str | None = None
 
     def is_terminal(self) -> bool:
         """Check if task is in a terminal state."""
@@ -116,4 +116,4 @@ class TaskSummary(BaseModel):
     attempt: int
     created_at: datetime
     updated_at: datetime
-    next_eligible_at: Optional[datetime] = None
+    next_eligible_at: datetime | None = None

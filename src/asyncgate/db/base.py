@@ -1,8 +1,8 @@
 """Database connection and session management."""
 
 import time
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator
 
 from sqlalchemy import event
 from sqlalchemy.ext.asyncio import (
@@ -65,8 +65,20 @@ async_session_factory = async_sessionmaker(
 _attach_query_metrics(engine)
 
 
+def register_models() -> None:
+    """Import every module that defines a table, so metadata is complete.
+
+    Deferred to call time rather than done at package import: auth.models
+    imports this module, so importing it from asyncgate.db.__init__ created a
+    cycle that broke `import asyncgate.auth`.
+    """
+    from asyncgate import auth  # noqa: F401  (registers User, APIKey)
+    from asyncgate.db import tables  # noqa: F401
+
+
 async def init_db() -> None:
     """Initialize database tables."""
+    register_models()
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 

@@ -12,6 +12,7 @@ from asyncgate.integrations.memorygate_client import (
     get_receiptgate_client,
     shutdown_receiptgate_client,
 )
+
 from .metagate_client import (
     acknowledge_startup,
     bootstrap_from_metagate,

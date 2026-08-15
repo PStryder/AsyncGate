@@ -1,7 +1,7 @@
 """Authentication context helpers."""
 
 from dataclasses import dataclass
-from typing import Literal, TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 if TYPE_CHECKING:
     from asyncgate.auth.models import User

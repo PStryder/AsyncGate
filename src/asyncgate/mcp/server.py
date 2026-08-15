@@ -4,16 +4,10 @@ import copy
 from typing import Any
 from uuid import UUID
 
-from mcp.server import Server
-from mcp.types import Tool, TextContent
-
 from asyncgate.auth.token import verify_auth_token
 from asyncgate.db.base import get_session
 from asyncgate.engine import (
     AsyncGateEngine,
-    InvalidStateTransition,
-    LeaseInvalidOrExpired,
-    TaskNotFound,
 )
 from asyncgate.models import Principal, PrincipalKind, ReceiptType, TaskStatus
 from asyncgate.observability.trace import set_trace_id
@@ -277,43 +271,17 @@ TOOL_DEFS: list[dict[str, Any]] = [
 ]
 
 
-def create_mcp_server() -> Server:
-    """Create and configure MCP server."""
-    server = Server("asyncgate")
-
-    # ========================================================================
-    # Tool definitions
-    # ========================================================================
-
-    @server.list_tools()
-    async def list_tools() -> list[Tool]:
-        """List available tools."""
-        return [
-            Tool(
-                name=tool["name"],
-                description=tool.get("description", ""),
-                inputSchema=tool.get("inputSchema") or {"type": "object", "properties": {}},
-            )
-            for tool in TOOL_DEFS
-        ]
-
-    # ========================================================================
-    # Tool handlers
-    # ========================================================================
-
-    @server.call_tool()
-    async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
-        """Handle tool calls."""
-        import json
-
-        try:
-            result = await _handle_tool(name, arguments)
-            return [TextContent(type="text", text=json.dumps(result, indent=2))]
-        except Exception as e:
-            error_result = {"error": str(e), "code": getattr(e, "code", "ERROR")}
-            return [TextContent(type="text", text=json.dumps(error_result, indent=2))]
-
-    return server
+# create_mcp_server() was removed here.
+#
+# It built an `mcp.server.Server` using `@server.list_tools()`,
+# `@server.call_tool()` and `Tool(inputSchema=...)`. The installed `mcp`
+# package has none of those: `Server` exposes neither decorator and `Tool`
+# names the field `input_schema`. Any call raised AttributeError immediately.
+#
+# Nothing called it. AsyncGate serves MCP through its own JSON-RPC router in
+# `mcp/http.py`, which imports TOOL_DEFS and _handle_tool from this module and
+# never touched the mcp package. The dependency was unbounded (`mcp>=1.0.0`),
+# so a major release silently broke code that was already unreachable.
 
 
 async def _handle_tool(name: str, arguments: dict[str, Any]) -> Any:

@@ -59,6 +59,11 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
+          # Canonical protocol package first. It is a hard dependency and is
+          # not published to an index, so it comes from the sibling checkout.
+          # Without it the receipt adapter cannot import, which is the point:
+          # a gate that cannot validate receipts must fail, not degrade.
+          python -m pip install -e ./_legivellum
           python -m pip install -e ".[dev]"
 
       - name: Dependency health
@@ -71,10 +76,14 @@ jobs:
         run: python -m compileall -q src/asyncgate
 
       - name: Ruff (full repo)
-        run: ruff check src/asyncgate --select E9,F63,F7,F82
+        # The declared [tool.ruff.lint] selection, not a hand-picked subset.
+        run: ruff check src/asyncgate
 
       - name: Mypy (full repo)
-        run: python -m mypy --config-file .mypy-ci.ini src/asyncgate
+        # The declared [tool.mypy] config. The .mypy-ci.ini override that
+        # disabled call-arg and attr-defined is deleted; those two codes
+        # caught live crashes here and are guarded by a test.
+        run: python -m mypy src/asyncgate
 
       - name: Run tests with coverage gate
         run: |
@@ -84,4 +93,17 @@ jobs:
             --cov-fail-under=40
 
       - name: Docker build
-        run: docker build -t asyncgate-ci .
+        # Build context is the parent of both checkouts so the image can
+        # install the protocol package. `_legivellum` is the LegiVellum
+        # checkout; lay it out as the Dockerfile expects.
+        run: |
+          mkdir -p _ctx/AsyncGate
+          cp -r _legivellum _ctx/LegiVellum
+          cp -r pyproject.toml README.md src alembic.ini alembic _ctx/AsyncGate/
+          docker build -f AsyncGate/Dockerfile -t asyncgate-ci _ctx
+
+      # Phase 0 exit condition: canonical validation must work inside the
+      # built image, with no checkout, mount, or sys.path help.
+      - name: Container validation probe
+        run: |
+          docker run --rm -v "$PWD/_legivellum/problemata_demo:/probe:ro" asyncgate-ci python /probe/container_validation_probe.py

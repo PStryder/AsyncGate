@@ -1,6 +1,5 @@
 """AsyncGate main application."""
 
-import asyncio
 import logging
 from contextlib import asynccontextmanager
 
@@ -17,8 +16,8 @@ from asyncgate.integrations import (
     bootstrap_from_metagate,
     shutdown_receiptgate_client,
 )
-from asyncgate.middleware.trace import trace_id_middleware
 from asyncgate.mcp.http import router as mcp_router
+from asyncgate.middleware.trace import trace_id_middleware
 from asyncgate.tasks.sweep import start_lease_sweep, stop_lease_sweep
 
 # Configure logging
@@ -33,7 +32,7 @@ logger = logging.getLogger("asyncgate")
 async def lifespan(app: FastAPI):
     """Application lifespan manager."""
     logger.info("Starting AsyncGate server...")
-    
+
     # Auto-detect instance_id if using default
     if settings.instance_id == "asyncgate-1":
         detected_id = detect_instance_id()
@@ -41,10 +40,10 @@ async def lifespan(app: FastAPI):
         logger.info(f"Auto-detected instance ID: {settings.instance_id}")
     else:
         logger.info(f"Using configured instance ID: {settings.instance_id}")
-    
+
     # Validate instance uniqueness (fail fast if unsafe)
     validate_instance_uniqueness(settings.instance_id, settings.env.value)
-    
+
     logger.info(f"Environment: {settings.env.value}")
 
     # Resolve peer endpoints from MetaGate before anything that depends on them.

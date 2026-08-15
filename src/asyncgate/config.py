@@ -1,9 +1,8 @@
 """AsyncGate configuration management."""
 
-from enum import Enum
-from typing import Any, Optional
-
 import json
+from enum import Enum
+from typing import Any
 
 from pydantic import AliasChoices, BaseModel, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -32,7 +31,7 @@ class EscalationTarget(BaseModel):
     class_id: int = Field(alias="class", description="Escalation class identifier")
     to_kind: str = Field(default="agent", description="Target principal kind")
     to_id: str = Field(..., description="Target principal identifier")
-    tenant_id: Optional[str] = Field(default=None, description="Override tenant ID for escalation")
+    tenant_id: str | None = Field(default=None, description="Override tenant ID for escalation")
 
 
 class Settings(BaseSettings):
@@ -58,7 +57,7 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://asyncgate:asyncgate@localhost:5432/asyncgate"
 
     # Redis (for rate limiting)
-    redis_url: Optional[str] = None
+    redis_url: str | None = None
 
     # Receipt mode
     receipt_mode: ReceiptMode = ReceiptMode.STANDALONE
@@ -66,7 +65,7 @@ class Settings(BaseSettings):
     # MetaGate bootstrap. Optional by design: MetaGate is a describe-only,
     # non-blocking authority, so an unset endpoint simply means "use the values
     # configured here" rather than a misconfiguration.
-    metagate_endpoint: Optional[str] = Field(
+    metagate_endpoint: str | None = Field(
         default=None,
         validation_alias=AliasChoices(
             "ASYNCGATE_METAGATE_ENDPOINT",
@@ -75,7 +74,7 @@ class Settings(BaseSettings):
             "METAGATE_URL",
         ),
     )
-    metagate_api_key: Optional[str] = Field(
+    metagate_api_key: str | None = Field(
         default=None,
         validation_alias=AliasChoices(
             "ASYNCGATE_METAGATE_API_KEY",
@@ -86,7 +85,7 @@ class Settings(BaseSettings):
     metagate_bootstrap_timeout_seconds: float = 5.0
 
     # ReceiptGate integration (only used if receipt_mode = RECEIPTGATE_INTEGRATED)
-    receiptgate_endpoint: Optional[str] = Field(
+    receiptgate_endpoint: str | None = Field(
         default=None,
         validation_alias=AliasChoices(
             "ASYNCGATE_RECEIPTGATE_ENDPOINT",
@@ -95,7 +94,7 @@ class Settings(BaseSettings):
             "RECEIPTGATE_URL",
         ),
     )
-    receiptgate_auth_token: Optional[str] = Field(
+    receiptgate_auth_token: str | None = Field(
         default=None,
         validation_alias=AliasChoices(
             "ASYNCGATE_RECEIPTGATE_AUTH_TOKEN",
@@ -104,7 +103,7 @@ class Settings(BaseSettings):
             "RECEIPTGATE_API_KEY",
         ),
     )
-    receiptgate_tenant_id: Optional[str] = None
+    receiptgate_tenant_id: str | None = None
     receiptgate_emission_timeout_ms: int = 500
     receiptgate_emission_buffer_size: int = 10000
     receiptgate_emission_buffer_path: str = ".asyncgate/receiptgate_emission_buffer.json"
@@ -139,7 +138,7 @@ class Settings(BaseSettings):
     rate_limit_default_window_seconds: int = Field(
         default=60, description="Default window size in seconds"
     )
-    
+
     @property
     def rate_limit_active(self) -> bool:
         """Rate limiting is forced on in staging/production regardless of config."""
@@ -152,10 +151,10 @@ class Settings(BaseSettings):
     max_lease_ttl_seconds: int = Field(default=1800, description="Max lease TTL (30 min)")
     lease_sweep_interval_seconds: int = Field(default=5, description="Lease sweep cadence")
     lease_grace_seconds: int = Field(default=0, description="Lease grace period")
-    
+
     # P1.1: Lease renewal limits (prevents hoarding DoS)
     max_lease_renewals: int = Field(
-        default=10, 
+        default=10,
         description="Maximum times a lease can be renewed before forcing release"
     )
     max_lease_lifetime_seconds: int = Field(
@@ -196,8 +195,8 @@ class Settings(BaseSettings):
 
     # Security (v0 - simple shared token)
     allow_insecure_dev: bool = Field(default=False, description="Allow unauthenticated in dev")
-    api_key: Optional[str] = None
-    
+    api_key: str | None = None
+
     # CORS configuration (P0.3 - explicit allowlist)
     cors_allowed_origins: list[str] = Field(
         default=["http://localhost:3000", "http://localhost:8080"],
@@ -218,8 +217,8 @@ class Settings(BaseSettings):
 
     # JWT settings (for OAuth)
     jwt_algorithm: str = "RS256"
-    jwt_private_key_path: Optional[str] = None
-    jwt_public_key_path: Optional[str] = None
+    jwt_private_key_path: str | None = None
+    jwt_public_key_path: str | None = None
     jwt_access_token_ttl_days: int = 30
     jwt_refresh_token_ttl_days: int = 90
 
@@ -246,7 +245,7 @@ class Settings(BaseSettings):
 
     @field_validator("receiptgate_endpoint", "redis_url")
     @classmethod
-    def validate_integration_url(cls, v: Optional[str]) -> Optional[str]:
+    def validate_integration_url(cls, v: str | None) -> str | None:
         """Validate integration URLs are HTTP(S) or redis://."""
         if v:
             if not v.startswith(("http://", "https://", "redis://", "rediss://")):
@@ -255,19 +254,19 @@ class Settings(BaseSettings):
 
     @field_validator("api_key")
     @classmethod
-    def validate_api_key(cls, v: Optional[str], info) -> Optional[str]:
+    def validate_api_key(cls, v: str | None, info) -> str | None:
         """Validate API key is set when auth is required."""
         allow_insecure = info.data.get("allow_insecure_dev", False)
         env = info.data.get("env")
-        
+
         # Production/staging must have api_key
         if env in [Environment.PRODUCTION, Environment.STAGING] and not v:
             raise ValueError(f"api_key is required in {env.value} environment")
-        
+
         # Dev without api_key requires explicit allow_insecure_dev
         if not v and not allow_insecure:
             raise ValueError("api_key is required when allow_insecure_dev=False")
-        
+
         return v
 
     @field_validator("escalation_targets", mode="before")
@@ -279,7 +278,7 @@ class Settings(BaseSettings):
             return json.loads(v)
         return v
 
-    def get_escalation_target(self, class_id: int) -> Optional[EscalationTarget]:
+    def get_escalation_target(self, class_id: int) -> EscalationTarget | None:
         """Return escalation target for a class identifier."""
         for target in self.escalation_targets:
             if target.class_id == class_id:

@@ -1,6 +1,6 @@
 """Lightweight metrics registry for AsyncGate."""
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from threading import Lock
 from typing import Any
 

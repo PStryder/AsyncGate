@@ -9,7 +9,7 @@ from contextlib import suppress
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 from uuid import uuid4
 
 import httpx
@@ -72,7 +72,7 @@ class ReceiptGateClient:
         buffer_path: Path | None = None,
         start_replay_worker: bool = True,
     ):
-        self._circuit_breaker: Optional[CircuitBreaker] = None
+        self._circuit_breaker: CircuitBreaker | None = None
         self._buffer_path = Path(
             buffer_path or settings.receiptgate_emission_buffer_path
         )
@@ -182,7 +182,7 @@ class ReceiptGateClient:
         if self._replay_task and not self._replay_task.done():
             try:
                 await asyncio.wait_for(self._replay_task, timeout=2.0)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 self._replay_task.cancel()
                 with suppress(asyncio.CancelledError):
                     await self._replay_task
@@ -391,10 +391,10 @@ class ReceiptGateClient:
 
             try:
                 await asyncio.wait_for(self._stop_replay_event.wait(), timeout=interval)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 continue
 
-    def get_circuit_stats(self) -> Optional[dict[str, Any]]:
+    def get_circuit_stats(self) -> dict[str, Any] | None:
         """Get circuit breaker statistics."""
         if not self._circuit_breaker:
             return None
@@ -442,7 +442,7 @@ class ReceiptGateClient:
 
 
 # Singleton instance
-_receiptgate_client: Optional[ReceiptGateClient] = None
+_receiptgate_client: ReceiptGateClient | None = None
 
 
 def get_receiptgate_client() -> ReceiptGateClient:

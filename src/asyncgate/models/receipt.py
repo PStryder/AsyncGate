@@ -1,9 +1,9 @@
 """Receipt model - immutable contract records."""
 
-from datetime import datetime
 import hashlib
 import json
-from typing import Any, Optional
+from datetime import datetime
+from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -25,9 +25,9 @@ class Receipt(BaseModel):
     to_: Principal = Field(serialization_alias="to", validation_alias="to")
 
     # Related entities (nullable)
-    task_id: Optional[UUID] = None
-    lease_id: Optional[UUID] = None
-    schedule_id: Optional[str] = None
+    task_id: UUID | None = None
+    lease_id: UUID | None = None
+    schedule_id: str | None = None
 
     # Causal linkage
     parents: list[UUID] = Field(default_factory=list)
@@ -36,13 +36,13 @@ class Receipt(BaseModel):
     body: dict[str, Any] = Field(default_factory=dict)
 
     # Integrity (for deduplication/equivalence, not crypto verification)
-    hash: Optional[str] = None
+    hash: str | None = None
 
     # AsyncGate instance that owns this receipt's task
-    asyncgate_instance: Optional[str] = None
+    asyncgate_instance: str | None = None
 
     # Delivery tracking
-    delivered_at: Optional[datetime] = None
+    delivered_at: datetime | None = None
 
     model_config = {"populate_by_name": True}
 
@@ -136,9 +136,9 @@ class ReceiptBody:
     ) -> dict[str, Any]:
         """
         Body for task.completed receipt.
-        
+
         Locatability requirement: Must provide EITHER artifacts OR delivery_proof.
-        
+
         Args:
             result_summary: Human-readable summary of completion
             result_payload: Optional structured result data
@@ -157,7 +157,7 @@ class ReceiptBody:
                     "proof": {...}  # request_id, etag, row_id, http_status, etc.
                 }
             completion_metadata: Additional context
-            
+
         Returns:
             Receipt body dict
         """

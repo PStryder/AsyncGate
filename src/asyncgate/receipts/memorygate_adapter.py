@@ -1,28 +1,22 @@
 """Adapter for rendering AsyncGate receipts in LegiVellum receipt schema."""
 
 import json
-import sys
-from pathlib import Path
 from typing import Any
+
+# The canonical receipt model is a hard dependency, imported unguarded.
+#
+# This was previously a path-walking shim wrapped in `except ImportError`,
+# which found `LegiVellum/shared` in a source checkout and nothing in a
+# container. When it failed, `CanonicalReceipt` became None and this module
+# returned the raw dict -- so AsyncGate POSTed unvalidated payloads to the
+# ledger in every deployment, and the resulting rejections were logged at
+# WARNING and dropped. `legivellum` is now an installed dependency (see
+# pyproject) and a missing one must stop the process, not silently disable
+# validation.
+from legivellum.models import Receipt as CanonicalReceipt
 
 from asyncgate.models import Principal, Receipt, ReceiptType, Task
 from asyncgate.models.enums import Outcome
-
-try:
-    from legivellum.models import Receipt as CanonicalReceipt
-except ImportError:
-    # Walk real ancestors rather than indexing a fixed depth: parents[4] raises
-    # IndexError when the module sits shallower (e.g. inside a container).
-    CanonicalReceipt = None
-    for parent in Path(__file__).resolve().parents:
-        shared_root = parent / "LegiVellum" / "shared"
-        if shared_root.exists():
-            sys.path.append(str(shared_root))
-            try:
-                from legivellum.models import Receipt as CanonicalReceipt
-            except ImportError:
-                CanonicalReceipt = None
-            break
 
 
 def _principal_value(principal: Principal) -> str:
@@ -257,8 +251,5 @@ def to_memorygate_receipt(receipt: Receipt, task: Task | None) -> dict[str, Any]
         "archived_at": None,
         "metadata": metadata,
     }
-
-    if CanonicalReceipt is None:
-        return payload
 
     return CanonicalReceipt.model_validate(payload).model_dump(mode="json")

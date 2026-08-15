@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
-from typing import Any
+from typing import Any, cast
 from uuid import UUID, uuid4
 
 from sqlalchemy import and_, delete, func, or_, select, update
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,7 +18,6 @@ from asyncgate.constants import (
     MAX_RECEIPT_PARENTS,
 )
 from asyncgate.db.tables import (
-    AuditEventTable,
     LeaseTable,
     ProgressTable,
     ReceiptTable,
@@ -36,15 +36,12 @@ from asyncgate.models import (
     TaskRequirements,
     TaskResult,
     TaskStatus,
-    TaskSummary,
 )
 from asyncgate.models.enums import Outcome
 from asyncgate.models.receipt import compute_receipt_hash
 from asyncgate.models.termination import (
-    get_obligation_types,
-    get_terminal_types,
-    is_terminal_type,
     TERMINAL_RECEIPT_TYPES,
+    is_terminal_type,
 )
 from asyncgate.principals import SERVICE_PRINCIPAL_ID, principal_id_variants
 from asyncgate.utils.time import utc_now
@@ -75,7 +72,7 @@ class TaskRepository:
     ) -> Task:
         """
         Create a new task.
-        
+
         Uses DB-first approach for idempotency: attempts insert and catches
         unique constraint violation, then fetches existing task. This prevents
         race conditions from check-then-insert pattern.
@@ -114,7 +111,7 @@ class TaskRepository:
         )
 
         self.session.add(task_row)
-        
+
         try:
             await self.session.flush()
             return self._row_to_model(task_row)
@@ -283,17 +280,17 @@ class TaskRepository:
     ) -> Task | None:
         """
         Requeue a task after lease expiry (lost authority, NOT task failure).
-        
+
         Critical difference from requeue_with_backoff:
         - Does NOT increment attempt counter (worker crash shouldn't eat retries)
         - Uses minimal jitter (0-5s) instead of exponential backoff
         - Prevents worker crashes from causing false terminal failures
-        
+
         Args:
             tenant_id: Tenant ID
             task_id: Task ID
             jitter_seconds: Optional jitter to add (0-5s recommended for anti-storm)
-        
+
         Returns:
             Updated task or None if not found
         """
@@ -304,7 +301,7 @@ class TaskRepository:
         now = utc_now()
         # CRITICAL: Do NOT increment attempt - lease expiry is "lost authority" not "task failed"
         attempt = task.attempt
-        
+
         # Minimal jitter instead of exponential backoff
         next_eligible_at = now + timedelta(seconds=jitter_seconds)
 
@@ -375,6 +372,22 @@ class TaskRepository:
             expected_artifact_mime=row.expected_artifact_mime,
             asyncgate_instance=row.asyncgate_instance,
         )
+
+    async def count_by_status(self, tenant_id: UUID) -> dict[TaskStatus, int]:
+        """Count tasks by status for a tenant.
+
+        This lived on ReceiptRepository while querying TaskTable, so its only
+        caller -- AsyncGateEngine.get_metrics_snapshot, which reaches it as
+        `self.tasks.count_by_status` -- raised AttributeError. Unreachable from
+        MCP today, so it never ran; it would have failed on the first call the
+        moment a metrics tool was exposed.
+        """
+        result = await self.session.execute(
+            select(TaskTable.status, func.count())
+            .where(TaskTable.tenant_id == tenant_id)
+            .group_by(TaskTable.status)
+        )
+        return {row[0]: row[1] for row in result.all()}
 
 
 class LeaseRepository:
@@ -510,11 +523,11 @@ class LeaseRepository:
     ) -> Lease | None:
         """
         Renew a lease.
-        
+
         P1.1: Enforces renewal limits to prevent lease hoarding:
         - max_lease_renewals: Maximum number of renewals allowed
         - max_lease_lifetime_seconds: Absolute maximum lifetime from acquisition
-        
+
         Raises:
             LeaseRenewalLimitExceeded: If renewal count limit exceeded
             LeaseLifetimeExceeded: If absolute lifetime limit exceeded
@@ -531,12 +544,12 @@ class LeaseRepository:
             .with_for_update()
         )
         lease_row = result.scalar_one_or_none()
-        
+
         if not lease_row:
             return None
-        
+
         now = utc_now()
-        
+
         # P1.1 ENFORCEMENT: Check renewal count limit
         if lease_row.renewal_count >= settings.max_lease_renewals:
             from asyncgate.engine.errors import LeaseRenewalLimitExceeded
@@ -546,12 +559,12 @@ class LeaseRepository:
                 renewal_count=lease_row.renewal_count,
                 max_renewals=settings.max_lease_renewals
             )
-        
+
         # P1.1 ENFORCEMENT: Check absolute lifetime limit
         lifetime = now - lease_row.acquired_at
         lifetime_seconds = int(lifetime.total_seconds())
         max_lifetime_seconds = settings.max_lease_lifetime_seconds
-        
+
         if lifetime_seconds >= max_lifetime_seconds:
             from asyncgate.engine.errors import LeaseLifetimeExceeded
             raise LeaseLifetimeExceeded(
@@ -599,18 +612,20 @@ class LeaseRepository:
                 LeaseTable.task_id == task_id,
             )
         )
-        return result.rowcount > 0
+        # execute() is typed Result; DML actually yields CursorResult, which is
+        # where rowcount lives. Narrow rather than disable attr-defined.
+        return cast("CursorResult[Any]", result).rowcount > 0
 
     async def get_expired(self, limit: int = 100, instance_id: str | None = None) -> list[Lease]:
         """
         Get expired leases for cleanup, optionally filtered by instance.
-        
+
         Args:
             limit: Maximum number of leases to return
             instance_id: Optional instance filter for multi-instance deployments
         """
         now = utc_now()
-        
+
         # Build query with join to tasks for instance filtering
         query = (
             select(LeaseTable)
@@ -626,13 +641,13 @@ class LeaseRepository:
                 TaskTable.status.in_([TaskStatus.LEASED, TaskStatus.RUNNING]),
             )
         )
-        
+
         # Filter by instance if provided (for multi-instance safety)
         if instance_id:
             query = query.where(TaskTable.asyncgate_instance == instance_id)
-        
+
         query = query.limit(limit)
-        
+
         result = await self.session.execute(query)
         return [self._row_to_model(r) for r in result.scalars().all()]
 
@@ -671,13 +686,13 @@ class ReceiptRepository:
     ) -> Receipt:
         """Create a new receipt."""
         import json
-        
+
         now = utc_now()
         receipt_id = uuid4()
 
         # T5.1: Receipt size limits - receipts are contracts, not chat
         # Prevent ledger bloat and abuse
-        
+
         # Validate body size (64KB max)
         if body:
             body_json = json.dumps(body, separators=(',', ':'))
@@ -689,7 +704,7 @@ class ReceiptRepository:
                     f"Receipt bodies are contracts, not chat messages. "
                     f"Store large payloads externally and reference via artifacts or delivery_proof."
                 )
-        
+
         # Validate parents count (10 max - prevent mega-chains)
         if parents and len(parents) > MAX_RECEIPT_PARENTS:
             raise ValueError(
@@ -697,7 +712,7 @@ class ReceiptRepository:
                 f"Receipt bodies are contracts, not chat messages. "
                 f"Avoid creating deep chains - use flat structures where possible."
             )
-        
+
         # Validate artifacts count if present (100 max - prevent stuffing)
         if body and 'artifacts' in body:
             artifacts = body['artifacts']
@@ -716,7 +731,7 @@ class ReceiptRepository:
                     f"Without parent linkage, obligations remain open forever (haunted bootstrap). "
                     f"Terminal receipts discharge obligations - they must reference what they terminate."
                 )
-            
+
             # Validate parent exists and shares tenant
             for parent_id in parents:
                 parent_exists = await self.session.execute(
@@ -735,18 +750,18 @@ class ReceiptRepository:
         # If success without locatability: strip parents so obligation stays open, emit anomaly
         parents_to_use = parents
         emit_locatability_anomaly = False
-        
+
         if receipt_type == ReceiptType.TASK_COMPLETED:
             body_data = body or {}
             has_artifacts = body_data.get('artifacts') is not None
             has_delivery_proof = body_data.get('delivery_proof') is not None
-            
+
             if not (has_artifacts or has_delivery_proof):
                 # Phase 1 (lenient): Allow creation but strip parents
                 # This keeps obligation open until proper locatable receipt created
                 parents_to_use = []
                 emit_locatability_anomaly = True
-                
+
                 import logging
                 logger = logging.getLogger(__name__)
                 logger.warning(
@@ -754,7 +769,7 @@ class ReceiptRepository:
                     f"lacks artifacts or delivery_proof. Parents stripped - obligation stays open. "
                     f"Emitting anomaly receipt to principal."
                 )
-                
+
                 # In Phase 2 (strict), this would raise ValueError instead
 
         receipt_hash_to_use = receipt_hash
@@ -795,7 +810,7 @@ class ReceiptRepository:
 
         self.session.add(receipt_row)
         await self.session.flush()
-        
+
         # Emit anomaly receipt if locatability was missing
         if emit_locatability_anomaly:
             trace_id = None
@@ -879,14 +894,6 @@ class ReceiptRepository:
 
         return [self._row_to_model(r) for r in rows], next_cursor
 
-    async def count_by_status(self, tenant_id: UUID) -> dict[TaskStatus, int]:
-        """Count tasks by status for a tenant."""
-        result = await self.session.execute(
-            select(TaskTable.status, func.count())
-            .where(TaskTable.tenant_id == tenant_id)
-            .group_by(TaskTable.status)
-        )
-        return {row[0]: row[1] for row in result.all()}
 
     async def list_filtered(
         self,
@@ -953,7 +960,7 @@ class ReceiptRepository:
             )
             .values(delivered_at=utc_now())
         )
-        return result.rowcount
+        return cast("CursorResult[Any]", result).rowcount
 
     async def get_undelivered_for_task(
         self,
@@ -1009,7 +1016,7 @@ class ReceiptRepository:
     async def get_by_id(self, tenant_id: UUID, receipt_id: UUID) -> Receipt | None:
         """
         Get a specific receipt by ID.
-        
+
         Used for receipt chain traversal and obligation verification.
         """
         result = await self.session.execute(
@@ -1055,22 +1062,22 @@ class ReceiptRepository:
     ) -> list[Receipt]:
         """
         Get receipts that reference a specific parent.
-        
+
         Used for finding terminal receipts that discharge an obligation.
         The parents field in receipts is a JSON array, so we need to check containment.
-        
+
         Args:
             tenant_id: Tenant identifier
             parent_receipt_id: The receipt ID to search for in parents arrays
             limit: Maximum results to return
-            
+
         Returns:
             List of receipts that have parent_receipt_id in their parents array
         """
         # PostgreSQL JSONB containment check
         # We need to check if the parents array contains the UUID as a string
         parent_str = str(parent_receipt_id)
-        
+
         result = await self.session.execute(
             select(ReceiptTable)
             .where(
@@ -1089,19 +1096,19 @@ class ReceiptRepository:
     ) -> bool:
         """
         Check if a terminator exists for a parent receipt (fast EXISTS query).
-        
+
         DB-driven termination check: Does evidence exist that discharges this obligation?
         Uses EXISTS for O(1) performance - doesn't load receipt data.
-        
+
         Args:
             tenant_id: Tenant identifier
             parent_receipt_id: The obligation receipt to check
-            
+
         Returns:
             True if any receipt references this as parent, False otherwise
         """
         parent_str = str(parent_receipt_id)
-        
+
         result = await self.session.execute(
             select(ReceiptTable.receipt_id)
             .where(
@@ -1121,15 +1128,15 @@ class ReceiptRepository:
     ) -> list[Receipt]:
         """
         Get all receipts that terminate a parent (may include retries/duplicates).
-        
+
         Returns receipts that reference parent_receipt_id in their parents array.
         Agents use this to walk provenance chains.
-        
+
         Args:
             tenant_id: Tenant identifier
             parent_receipt_id: The obligation receipt
             limit: Maximum results to return
-            
+
         Returns:
             List of receipts that reference this parent, ordered by created_at
         """
@@ -1154,19 +1161,19 @@ class ReceiptRepository:
     ) -> Receipt | None:
         """
         Get the most recent terminator for a parent receipt.
-        
+
         Simplifies agent logic: when multiple terminators exist (retries, duplicates),
         return the canonical one (most recent by created_at).
-        
+
         Args:
             tenant_id: Tenant identifier
             parent_receipt_id: The obligation receipt
-            
+
         Returns:
             Most recent terminating receipt, or None if no terminator exists
         """
         parent_str = str(parent_receipt_id)
-        
+
         result = await self.session.execute(
             select(ReceiptTable)
             .where(
@@ -1190,41 +1197,41 @@ class ReceiptRepository:
     ) -> tuple[list[Receipt], UUID | None]:
         """
         List open obligations for a principal.
-        
+
         OPTIMIZED (P0.1): Uses batch termination check instead of N+1 queries.
         Leverages GIN index on parents JSONB column for fast containment checks.
-        
+
         An obligation is "open" if:
         1. It's a receipt type that can create obligations (in TERMINATION_RULES)
         2. It's addressed to the specified principal
         3. No terminal child receipt exists that references it as a parent
-        
+
         This is the core bootstrap primitive: dump of uncommitted obligations.
-        
+
         Args:
             tenant_id: Tenant identifier
             to_kind: Principal kind to filter by
             to_id: Principal ID to filter by
             since_receipt_id: Cursor for pagination (return obligations after this)
             limit: Maximum results to return
-            
+
         Returns:
             Tuple of (obligations list, next_cursor)
         """
         # Import here to avoid circular dependency
         from asyncgate.models.termination import TERMINATION_RULES
-        
+
         # Get obligation types (receipt types that create obligations)
         obligation_types = list(TERMINATION_RULES.keys())
-        
+
         if not obligation_types:
             # No obligation types registered yet
             return [], None
-        
+
         # Fetch candidates with hard cap to prevent runaway queries
         # Factor of 3 allows filtering, but cap at 1000 absolute max
         candidate_limit = min(limit * 3, 1000)
-        
+
         # Base query: receipts to this principal of obligation types
         to_ids = principal_id_variants(to_id)
         query = select(ReceiptTable).where(
@@ -1233,7 +1240,7 @@ class ReceiptRepository:
             ReceiptTable.to_id.in_(to_ids),
             ReceiptTable.receipt_type.in_(obligation_types),
         )
-        
+
         # Pagination cursor
         if since_receipt_id:
             cursor_result = await self.session.execute(
@@ -1245,23 +1252,23 @@ class ReceiptRepository:
             cursor_time = cursor_result.scalar_one_or_none()
             if cursor_time:
                 query = query.where(ReceiptTable.created_at > cursor_time)
-        
+
         query = query.order_by(ReceiptTable.created_at.asc()).limit(candidate_limit + 1)
-        
+
         result = await self.session.execute(query)
-        candidate_rows = list(result.scalars().all())
-        
+        candidate_rows: list[ReceiptTable] = list(result.scalars().all())
+
         if not candidate_rows:
             return [], None
 
         more_candidates = len(candidate_rows) > candidate_limit
         if more_candidates:
             candidate_rows = candidate_rows[:candidate_limit]
-        
+
         # BATCH TERMINATION CHECK (P0.1 optimization)
         # Single query instead of N queries - uses GIN index on parents
         candidate_ids = [str(row.receipt_id) for row in candidate_rows]
-        
+
         # Query: Find all receipts whose parents array contains any candidate ID
         # PostgreSQL JSONB array overlap using the GIN index
         terminated_result = await self.session.execute(
@@ -1274,35 +1281,35 @@ class ReceiptRepository:
                 func.jsonb_array_length(ReceiptTable.parents) > 0,
             )
         )
-        
+
         # Build set of terminated receipt IDs by checking overlap
         terminated_ids = set()
         candidate_id_set = set(candidate_ids)
-        
+
         for row in terminated_result:
             # Check if any parent matches our candidates
             for parent_str in row.parents:
                 if parent_str in candidate_id_set:
                     terminated_ids.add(UUID(parent_str))
-        
+
         # Filter candidates: keep only those NOT terminated
         open_obligations = []
-        
+
         for row in candidate_rows:
             if row.receipt_id not in terminated_ids:
                 open_obligations.append(self._row_to_model(row))
-                
+
             # Stop if we have enough
             if len(open_obligations) >= limit:
                 break
-        
+
         # Determine next cursor
         next_cursor = None
         if len(open_obligations) >= limit:
             next_cursor = open_obligations[-1].receipt_id
         elif more_candidates and candidate_rows:
             next_cursor = candidate_rows[-1].receipt_id
-        
+
         return open_obligations[:limit], next_cursor
 
     def _row_to_model(self, row: ReceiptTable) -> Receipt:

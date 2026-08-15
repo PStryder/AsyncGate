@@ -62,3 +62,6 @@ secrets/
 # OS
 .DS_Store
 Thumbs.db
+
+# Resolver output, not a source artifact; sibling repos ignore it too.
+uv.lock

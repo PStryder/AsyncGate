@@ -2,18 +2,19 @@
 
 import logging
 import secrets
-from typing import AsyncGenerator, Optional, TYPE_CHECKING
+from collections.abc import AsyncGenerator
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 from fastapi import Depends, Header, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from asyncgate.auth.context import AuthContext
 from asyncgate.config import Environment, settings
 from asyncgate.db.base import async_session_factory
-from asyncgate.auth.context import AuthContext
 
 if TYPE_CHECKING:
-    from asyncgate.auth.models import User
+    pass
 
 
 logger = logging.getLogger("asyncgate.api")
@@ -69,7 +70,7 @@ async def verify_api_key(
     Security: Fails closed - if neither mode is configured and we're not
     in explicit insecure dev mode, all requests are rejected.
     """
-    from asyncgate.auth.middleware import verify_request_api_key, API_KEY_PREFIX
+    from asyncgate.auth.middleware import API_KEY_PREFIX, verify_request_api_key
 
     # Insecure dev mode bypass (must be explicitly enabled)
     if settings.allow_insecure_dev and settings.env == Environment.DEVELOPMENT:
@@ -146,8 +147,8 @@ def validate_auth_config() -> None:
     # Note: Database auth doesn't require config - keys are created via admin API
     if not settings.allow_insecure_dev and not settings.api_key:
         logger.info(
-            f"No legacy ASYNCGATE_API_KEY configured. "
-            f"Database-backed API keys (ag_...) will be required for authentication."
+            "No legacy ASYNCGATE_API_KEY configured. "
+            "Database-backed API keys (ag_...) will be required for authentication."
         )
 
     # Log security status

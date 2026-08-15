@@ -1,3 +1,16 @@
+# AsyncGate — the execution boundary.
+#
+# Build context is the STACK ROOT, not this repository:
+#
+#     docker build -f AsyncGate/Dockerfile .
+#
+# The image must install the canonical protocol package from the sibling
+# LegiVellum checkout. Previously it did not, and the receipt adapter resolved
+# `legivellum` by walking parent directories for a source tree that does not
+# exist in an image. That import failed, the failure was swallowed by
+# `except ImportError`, and AsyncGate POSTed unvalidated payloads to the ledger
+# in every deployment including the demo stack.
+
 FROM python:3.11-slim
 
 WORKDIR /app
@@ -8,15 +21,25 @@ RUN apt-get update && apt-get install -y \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
+# The canonical protocol package first: receipt models, validation, and the
+# schema, which ships as package data so validation needs no source checkout.
+COPY LegiVellum/pyproject.toml LegiVellum/README.md /src/LegiVellum/
+COPY LegiVellum/shared/ /src/LegiVellum/shared/
+RUN pip install --no-cache-dir /src/LegiVellum
+
 # Copy project files
-COPY pyproject.toml .
-COPY README.md .
-COPY src/ src/
-COPY alembic.ini .
-COPY alembic/ alembic/
+COPY AsyncGate/pyproject.toml .
+COPY AsyncGate/README.md .
+COPY AsyncGate/src/ src/
+COPY AsyncGate/alembic.ini .
+COPY AsyncGate/alembic/ alembic/
 
 # Install Python dependencies
 RUN pip install --no-cache-dir .
+
+# Fail the build if the receipt validator is not importable. An image that
+# cannot validate must not be publishable, rather than degrading at runtime.
+RUN python -c "import legivellum.validation as v; p = v.schema_path(); assert p.exists(), p; print('receipt schema resolved at', p)"
 
 # Create non-root user
 RUN addgroup --system --gid 1001 asyncgate && \

@@ -6,7 +6,6 @@ from time import perf_counter
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from asyncgate.config import ReceiptMode, settings
@@ -17,30 +16,28 @@ from asyncgate.db.repositories import (
     RelationshipRepository,
     TaskRepository,
 )
-from asyncgate.db.tables import TaskTable
 from asyncgate.engine.errors import (
     InvalidStateTransition,
     LeaseInvalidOrExpired,
     TaskNotFound,
     UnauthorizedError,
 )
+from asyncgate.integrations import get_receiptgate_client
 from asyncgate.models import (
-    Lease,
     Principal,
     PrincipalKind,
-    Progress,
     Receipt,
     ReceiptType,
-    Relationship,
     Task,
     TaskRequirements,
     TaskResult,
     TaskStatus,
     TaskSummary,
 )
-from asyncgate.models.enums import AnomalyKind, Outcome
-from asyncgate.models.lease import LeaseInfo
+from asyncgate.models.enums import Outcome
 from asyncgate.models.receipt import ReceiptBody, compute_receipt_hash
+from asyncgate.observability.metrics import metrics
+from asyncgate.observability.trace import ensure_trace_id, get_trace_id
 from asyncgate.principals import (
     SERVICE_PRINCIPAL_ID,
     SYSTEM_PRINCIPAL_ID,
@@ -49,9 +46,6 @@ from asyncgate.principals import (
     normalize_external,
 )
 from asyncgate.receipts import to_memorygate_receipt
-from asyncgate.integrations import get_receiptgate_client
-from asyncgate.observability.metrics import metrics
-from asyncgate.observability.trace import ensure_trace_id, get_trace_id
 from asyncgate.utils.time import utc_now
 
 logger = logging.getLogger(__name__)
@@ -59,13 +53,17 @@ logger = logging.getLogger(__name__)
 class AsyncGateEngine:
     """Core engine implementing canonical AsyncGate operations."""
 
-    def __init__(self, session: AsyncSession):
-        self.session = session
-        self.tasks = TaskRepository(session)
-        self.leases = LeaseRepository(session)
-        self.receipts = ReceiptRepository(session)
-        self.progress = ProgressRepository(session)
-        self.relationships = RelationshipRepository(session)
+    def __init__(self, session: AsyncSession) -> None:
+        # Annotated so the repository types resolve. Without a return
+        # annotation this body is untyped, mypy gives every `self.<repo>` a
+        # partial type, and every call through them degrades to a spurious
+        # "has no attribute" on results that are correctly typed at source.
+        self.session: AsyncSession = session
+        self.tasks: TaskRepository = TaskRepository(session)
+        self.leases: LeaseRepository = LeaseRepository(session)
+        self.receipts: ReceiptRepository = ReceiptRepository(session)
+        self.progress: ProgressRepository = ProgressRepository(session)
+        self.relationships: RelationshipRepository = RelationshipRepository(session)
 
     def _service_principal(self) -> Principal:
         """Return the canonical service principal for AsyncGate-emitted receipts."""
@@ -143,11 +141,11 @@ class AsyncGateEngine:
     ) -> dict[str, Any]:
         """
         DEPRECATED: Use list_open_obligations() instead.
-        
+
         Legacy bootstrap with attention semantics. Simplified to remove
         task-state queries (wrong model). Returns minimal response for
         API compatibility while clients migrate to asyncgate.bootstrap.
-        
+
         Bootstrap is idempotent and safe to call frequently.
         """
         principal = self._normalize_principal(principal)
@@ -342,7 +340,7 @@ class AsyncGateEngine:
     ) -> dict[str, Any]:
         """
         Cancel a task.
-        
+
         P0.2: All state changes + receipt emissions are atomic via savepoint.
         """
         principal = self._normalize_principal(principal)
@@ -441,6 +439,7 @@ class AsyncGateEngine:
         """List receipts with filters, formatted as MemoryGate receipts."""
         limit = min(limit or settings.default_list_limit, settings.max_list_limit)
 
+        receipts: list[Receipt]
         receipts, next_cursor = await self.receipts.list_filtered(
             tenant_id=tenant_id,
             task_id=task_id,
@@ -698,7 +697,7 @@ class AsyncGateEngine:
     ) -> dict[str, Any]:
         """
         Mark a task as successfully completed.
-        
+
         P0.2: All state changes + receipt emissions are atomic via savepoint.
         If any operation fails, entire transaction rolls back.
         """
@@ -757,7 +756,7 @@ class AsyncGateEngine:
             # 4. Emit result_ready to task owner
             task = await self.tasks.get(tenant_id, task_id)
             await self._emit_result_ready_receipt(tenant_id, task, owner=owner, parents=parents)
-        
+
         # If we reach here, all operations succeeded and were committed
         return {"ok": True}
 
@@ -772,7 +771,7 @@ class AsyncGateEngine:
     ) -> dict[str, Any]:
         """
         Mark a task as failed.
-        
+
         P0.2: All state changes + receipt emissions are atomic via savepoint.
         Handles both requeue path and terminal failure path atomically.
 
@@ -811,7 +810,7 @@ class AsyncGateEngine:
                 # REQUEUE PATH: Task gets another attempt
                 task = await self.tasks.requeue_with_backoff(tenant_id, task_id, increment_attempt=True)
                 next_eligible_at = task.next_eligible_at
-                
+
                 # Emit retry scheduled receipt to task owner (non-terminal)
                 await self._emit_receipt(
                     tenant_id=tenant_id,
@@ -857,9 +856,9 @@ class AsyncGateEngine:
                 # Emit result_ready to task owner
                 task = await self.tasks.get(tenant_id, task_id)
                 await self._emit_result_ready_receipt(tenant_id, task, owner=owner, parents=parents)
-                
+
                 next_eligible_at = None
-        
+
         # If we reach here, all operations succeeded and were committed
         return {
             "ok": True,
@@ -877,25 +876,25 @@ class AsyncGateEngine:
 
         Called by background sweep task. Only processes leases for tasks
         owned by this AsyncGate instance (multi-instance safe).
-        
+
         CRITICAL: Uses requeue_on_expiry() which does NOT increment attempt.
         Lease expiry is "lost authority" (worker crash), not "task failed".
-        
+
         P0.2: Each lease expiry is atomic - requeue + lease release + receipt
         all succeed or all rollback.
-        
+
         Args:
             batch_size: Number of leases to process per batch (default 20).
                        Smaller batches with jittered requeue times prevent
                        thundering herd when many leases expire simultaneously.
-        
+
         Returns:
             Total number of expired leases processed.
         """
         import random
-        
+
         expired_leases = await self.leases.get_expired(
-            limit=100, 
+            limit=100,
             instance_id=settings.instance_id
         )
         count = 0
@@ -917,7 +916,7 @@ class AsyncGateEngine:
             # Add jitter to requeue time: 0-5 seconds random delay
             # This prevents all expired tasks from becoming eligible simultaneously
             jitter_seconds = random.uniform(0, 5)
-            
+
             # P0.2: ATOMIC BLOCK - Each lease expiry is atomic
             try:
                 async with self.session.begin_nested():  # SAVEPOINT
@@ -971,7 +970,7 @@ class AsyncGateEngine:
                         obligation=obligation,
                         lease_id=lease.lease_id,
                     )
-                
+
                 count += 1
                 metrics.inc_counter("leases.expired")
             except Exception as e:
@@ -981,7 +980,7 @@ class AsyncGateEngine:
                 logger.error(f"Failed to expire lease {lease.lease_id}: {e}", exc_info=True)
                 metrics.inc_counter("leases.expired.failed")
                 continue
-            
+
             # Batch processing: commit and pause between batches
             if count % batch_size == 0:
                 await self.session.commit()
@@ -1001,7 +1000,7 @@ class AsyncGateEngine:
     ) -> dict[str, Any] | None:
         """
         Get a specific receipt by ID.
-        
+
         Used for receipt chain traversal and obligation verification.
         """
         receipt = await self.receipts.get_by_id(tenant_id, receipt_id)
@@ -1017,10 +1016,10 @@ class AsyncGateEngine:
     ) -> list[dict[str, Any]]:
         """
         List all receipts that reference a specific parent.
-        
+
         Used by agents to find terminal receipts (may include retries/duplicates).
         """
-        receipts = await self.receipts.get_by_parent(
+        receipts: list[Receipt] = await self.receipts.get_by_parent(
             tenant_id, parent_receipt_id, limit
         )
         return [self._receipt_to_dict(r) for r in receipts]
@@ -1032,7 +1031,7 @@ class AsyncGateEngine:
     ) -> dict[str, Any] | None:
         """
         Get the most recent terminator for a parent receipt.
-        
+
         Simplifies agent logic: when multiple terminators exist (retries, duplicates),
         return the canonical one (most recent).
         """
@@ -1050,7 +1049,7 @@ class AsyncGateEngine:
     ) -> bool:
         """
         Fast check: does a terminator exist for this obligation?
-        
+
         DB-driven: O(1) EXISTS query, doesn't load receipt data.
         """
         return await self.receipts.has_terminator(tenant_id, parent_receipt_id)
@@ -1064,16 +1063,17 @@ class AsyncGateEngine:
     ) -> dict[str, Any]:
         """
         List open obligations for a principal.
-        
+
         This is the foundation for the new bootstrap model:
         - Returns receipts that create obligations (task.assigned, etc.)
         - Filters to only those without terminal child receipts
         - Pure ledger dump, no bucketing or interpretation
-        
+
         An obligation is "open" if no terminator receipt exists that references
         it as a parent. Termination is detected via DB, not semantic inference.
         """
         principal = self._normalize_principal(principal)
+        obligations: list[Receipt]
         obligations, next_cursor = await self.receipts.list_open_obligations(
             tenant_id=tenant_id,
             to_kind=principal.kind,
@@ -1294,11 +1294,19 @@ class AsyncGateEngine:
                 client = get_receiptgate_client()
                 await client.emit_receipt(receipt_payload)
             except Exception as exc:
+                # stdlib logger, so structured fields go through `extra`.
+                # Passing them as kwargs raised TypeError here, which then
+                # propagated out of _emit_receipt and out of the enclosing
+                # begin_nested(), rolling back the completion it was only
+                # supposed to warn about. The identical bug was found and
+                # fixed thirty lines above and left in place here.
                 logger.warning(
                     "receiptgate_receipt_emit_failed",
-                    receipt_type=receipt_type.value,
-                    task_id=str(task_id) if task_id else None,
-                    error=str(exc),
+                    extra={
+                        "receipt_type": receipt_type.value,
+                        "task_id": str(task_id) if task_id else None,
+                        "error": str(exc),
+                    },
                 )
 
         return receipt
@@ -1341,17 +1349,17 @@ class AsyncGateEngine:
     ) -> str:
         """
         Compute hash for receipt deduplication.
-        
+
         P0.5: Parents are now included in hash to prevent collisions
         where same body but different parents would dedupe incorrectly.
-        
+
         Includes all fields that make a receipt unique:
         - receipt_type, task_id, lease_id
         - from (kind + id)
         - to (kind + id)
         - parents (sorted list of UUID strings)
         - body (canonical JSON)
-        
+
         Returns full 64-character SHA256 hex digest.
         """
         return compute_receipt_hash(

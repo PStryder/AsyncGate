@@ -7,7 +7,6 @@ from uuid import UUID
 from sqlalchemy import (
     DateTime,
     Enum,
-    ForeignKey,
     ForeignKeyConstraint,
     Index,
     Integer,
@@ -15,7 +14,8 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
 )
-from sqlalchemy.dialects.postgresql import JSONB, UUID as PG_UUID
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from asyncgate.db.base import Base
@@ -56,8 +56,8 @@ class TaskTable(Base):
 
     # Status
     status: Mapped[TaskStatus] = mapped_column(
-        Enum(TaskStatus, values_callable=lambda x: [e.value for e in x]), 
-        nullable=False, 
+        Enum(TaskStatus, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
         default=TaskStatus.QUEUED
     )
 
@@ -129,16 +129,16 @@ class LeaseTable(Base):
     worker_id: Mapped[str] = mapped_column(String(255), nullable=False)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    
+
     # P1.1: Renewal tracking
     acquired_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), 
+        DateTime(timezone=True),
         nullable=False,
         comment="When lease was initially acquired (for absolute lifetime tracking)"
     )
     renewal_count: Mapped[int] = mapped_column(
-        Integer, 
-        nullable=False, 
+        Integer,
+        nullable=False,
         default=0,
         comment="Number of times lease has been renewed (P1.1 - prevents hoarding)"
     )
@@ -171,21 +171,21 @@ class ReceiptTable(Base):
     receipt_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True)
 
     receipt_type: Mapped[ReceiptType] = mapped_column(
-        Enum(ReceiptType, values_callable=lambda x: [e.value for e in x]), 
+        Enum(ReceiptType, values_callable=lambda x: [e.value for e in x]),
         nullable=False
     )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
     # Sender
     from_kind: Mapped[str] = mapped_column(
-        Enum(PrincipalKind, values_callable=lambda x: [e.value for e in x]), 
+        Enum(PrincipalKind, values_callable=lambda x: [e.value for e in x]),
         nullable=False
     )
     from_id: Mapped[str] = mapped_column(String(255), nullable=False)
 
     # Recipient
     to_kind: Mapped[str] = mapped_column(
-        Enum(PrincipalKind, values_callable=lambda x: [e.value for e in x]), 
+        Enum(PrincipalKind, values_callable=lambda x: [e.value for e in x]),
         nullable=False
     )
     to_id: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -275,7 +275,7 @@ class RelationshipTable(Base):
 
     tenant_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True)
     principal_kind: Mapped[str] = mapped_column(
-        Enum(PrincipalKind, values_callable=lambda x: [e.value for e in x]), 
+        Enum(PrincipalKind, values_callable=lambda x: [e.value for e in x]),
         primary_key=True
     )
     principal_id: Mapped[str] = mapped_column(String(255), primary_key=True)

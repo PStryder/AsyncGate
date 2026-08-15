@@ -3,7 +3,6 @@
 import asyncio
 import logging
 import random
-from typing import Optional
 
 from asyncgate.config import settings
 from asyncgate.db.base import get_session
@@ -12,8 +11,8 @@ from asyncgate.observability.trace import ensure_trace_id
 
 logger = logging.getLogger("asyncgate.sweep")
 
-_sweep_task: Optional[asyncio.Task] = None
-_shutdown_event: Optional[asyncio.Event] = None
+_sweep_task: asyncio.Task | None = None
+_shutdown_event: asyncio.Event | None = None
 
 
 async def lease_sweep_loop():
@@ -26,7 +25,7 @@ async def lease_sweep_loop():
     - Transition task leased -> queued
     - Increment attempt if appropriate
     - Emit lease.expired receipt (to agent; optionally to worker)
-    
+
     Anti-storm protections:
     - Jittered sweep interval (±20% randomization) prevents synchronized sweeps
     - Small batch processing (20 tasks/batch) prevents transaction pile-up
@@ -54,14 +53,14 @@ async def lease_sweep_loop():
         # Prevents multiple instances from sweeping in lockstep
         jitter_factor = random.uniform(0.8, 1.2)
         jittered_interval = base_interval * jitter_factor
-        
+
         # Wait for next sweep interval or shutdown
         try:
             await asyncio.wait_for(
                 _shutdown_event.wait(),
                 timeout=jittered_interval,
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             pass  # Continue loop
 
     logger.info("Lease sweep loop stopped")
@@ -85,7 +84,7 @@ async def stop_lease_sweep():
     if _sweep_task:
         try:
             await asyncio.wait_for(_sweep_task, timeout=10.0)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning("Lease sweep task did not stop gracefully, cancelling")
             _sweep_task.cancel()
             try:

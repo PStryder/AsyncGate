@@ -1,6 +1,5 @@
 """Principal model - actors in the system."""
 
-from typing import Optional
 
 from pydantic import BaseModel
 
@@ -12,7 +11,7 @@ class Principal(BaseModel):
 
     kind: PrincipalKind
     id: str
-    instance_id: Optional[str] = None
+    instance_id: str | None = None
 
     def __hash__(self) -> int:
         return hash((self.kind, self.id, self.instance_id))

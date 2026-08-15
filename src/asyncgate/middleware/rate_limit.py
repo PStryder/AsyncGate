@@ -6,7 +6,6 @@ import time
 from abc import ABC, abstractmethod
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import Dict, Optional, Tuple
 
 from fastapi import HTTPException, Request, status
 
@@ -30,15 +29,15 @@ class RateLimiterBackend(ABC):
     @abstractmethod
     async def check_rate_limit(
         self, key: str, max_calls: int, window_seconds: int
-    ) -> Tuple[bool, int, int]:
+    ) -> tuple[bool, int, int]:
         """
         Check if request should be rate limited.
-        
+
         Args:
             key: Rate limit key (typically client ID or IP)
             max_calls: Maximum calls allowed in window
             window_seconds: Window size in seconds
-            
+
         Returns:
             Tuple of (allowed: bool, remaining: int, reset_time: int)
             - allowed: Whether request should proceed
@@ -56,18 +55,18 @@ class RateLimiterBackend(ABC):
 class InMemoryRateLimiter(RateLimiterBackend):
     """
     In-memory rate limiter using sliding window.
-    
+
     Good for development and single-instance deployments.
     Not suitable for multi-instance production (no shared state).
     """
 
     def __init__(self):
-        self._windows: Dict[str, list[float]] = defaultdict(list)
+        self._windows: dict[str, list[float]] = defaultdict(list)
         self._lock = asyncio.Lock()
 
     async def check_rate_limit(
         self, key: str, max_calls: int, window_seconds: int
-    ) -> Tuple[bool, int, int]:
+    ) -> tuple[bool, int, int]:
         """Check rate limit using sliding window."""
         async with self._lock:
             now = time.time()
@@ -105,7 +104,7 @@ class InMemoryRateLimiter(RateLimiterBackend):
 class RedisRateLimiter(RateLimiterBackend):
     """
     Redis-backed rate limiter using sorted sets.
-    
+
     Suitable for multi-instance production deployments.
     Requires redis to be installed: pip install redis[hiredis]
     """
@@ -124,26 +123,26 @@ class RedisRateLimiter(RateLimiterBackend):
 
     async def check_rate_limit(
         self, key: str, max_calls: int, window_seconds: int
-    ) -> Tuple[bool, int, int]:
+    ) -> tuple[bool, int, int]:
         """Check rate limit using Redis sorted set."""
         now = time.time()
         window_start = now - window_seconds
         redis_key = f"ratelimit:{key}"
 
         pipe = self.redis.pipeline()
-        
+
         # Remove old entries
         pipe.zremrangebyscore(redis_key, 0, window_start)
-        
+
         # Count current entries
         pipe.zcard(redis_key)
-        
+
         # Add current request (with score = timestamp)
         pipe.zadd(redis_key, {str(now): now})
-        
+
         # Set expiry on key
         pipe.expire(redis_key, window_seconds)
-        
+
         results = await pipe.execute()
         current_calls = results[1]  # Result of zcard
 
@@ -172,13 +171,13 @@ class RedisRateLimiter(RateLimiterBackend):
 class RateLimiter:
     """
     Main rate limiter with configurable backend.
-    
+
     Usage:
         limiter = RateLimiter()
         await limiter.check_request(request)
     """
 
-    def __init__(self, backend: Optional[RateLimiterBackend] = None):
+    def __init__(self, backend: RateLimiterBackend | None = None):
         if backend:
             self.backend = backend
         elif settings.rate_limit_backend == "redis":
@@ -189,7 +188,7 @@ class RateLimiter:
             self.backend = InMemoryRateLimiter()
             logger.info("Using in-memory rate limiter (dev only)")
 
-        self._rules: Dict[str, RateLimitRule] = {}
+        self._rules: dict[str, RateLimitRule] = {}
         self._default_rule = RateLimitRule(
             calls=settings.rate_limit_default_calls,
             window_seconds=settings.rate_limit_default_window_seconds,
@@ -204,15 +203,15 @@ class RateLimiter:
         )
 
     async def check_request(
-        self, request: Request, key_override: Optional[str] = None
+        self, request: Request, key_override: str | None = None
     ) -> None:
         """
         Check if request should be rate limited.
-        
+
         Args:
             request: FastAPI request
             key_override: Optional custom rate limit key
-            
+
         Raises:
             HTTPException: 429 if rate limited
         """
@@ -288,7 +287,7 @@ class RateLimiter:
 
 
 # Singleton instance
-_rate_limiter: Optional[RateLimiter] = None
+_rate_limiter: RateLimiter | None = None
 
 
 def get_rate_limiter() -> RateLimiter:
