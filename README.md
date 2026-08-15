@@ -220,6 +220,26 @@ Terminal receipt types for task obligations:
 
 Terminator detection is type-gated: only terminal receipt types close obligations.
 
+## MetaGate Bootstrap
+
+On startup this gate asks MetaGate for the topology it belongs to and fills in
+endpoints the operator did not configure. It resolves: `receiptgate` → `receiptgate_endpoint`.
+
+| Variable | Default | Meaning |
+|----------|---------|---------|
+| `ASYNCGATE_METAGATE_ENDPOINT` | *(unset)* | MetaGate MCP endpoint. Unset disables bootstrap; the gate starts on configured values alone. |
+| `ASYNCGATE_METAGATE_API_KEY` | *(unset)* | Credential presented to MetaGate |
+| `ASYNCGATE_METAGATE_COMPONENT_KEY` | `asyncgate` | Which component in the manifest this process is |
+| `ASYNCGATE_METAGATE_BOOTSTRAP_TIMEOUT_SECONDS` | `5.0` | Per-call timeout |
+
+Bootstrap never prevents startup. Every failure — unreachable, timeout, auth
+rejected, no binding, malformed packet — degrades to a logged warning and
+"carry on with configured values", because a bootstrap authority that can take
+the mesh down would be a hidden master. Explicit configuration always wins;
+bootstrap fills gaps and logs when the mesh disagrees rather than overriding.
+
+See `LegiVellum/docs/canonical/metagate.bootstrap.md` for the full contract.
+
 ## License
 
 MIT
