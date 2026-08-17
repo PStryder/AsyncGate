@@ -201,7 +201,6 @@ See `.env.example` for a working starting point.
 | `ASYNCGATE_RECEIPTGATE_EMISSION_RETRY_INTERVAL_SECONDS` | `30` | How often buffered receipts are replayed |
 | `ASYNCGATE_RECEIPTGATE_EMISSION_TIMEOUT_MS` | `500` | Per-emission timeout |
 | `ASYNCGATE_RECEIPTGATE_ENDPOINT` | *(unset)* | ReceiptGate MCP endpoint. Only used when `receipt_mode=receiptgate_integrated`. Also accepts `ASYNCGATE_RECEIPTGATE_URL`, `RECEIPTGATE_ENDPOINT`, `RECEIPTGATE_URL` |
-| `ASYNCGATE_RECEIPTGATE_TENANT_ID` | *(unset)* | Tenant for receipt writes |
 
 ### Rate limiting
 

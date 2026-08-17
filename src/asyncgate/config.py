@@ -103,7 +103,11 @@ class Settings(BaseSettings):
             "RECEIPTGATE_API_KEY",
         ),
     )
-    receiptgate_tenant_id: str | None = None
+    # No receiptgate_tenant_id. It existed here, was documented as "tenant for
+    # receipt writes", was set by the demo stack, and was read by nothing --
+    # receipts carry the obligation's own tenant. Keeping it implied AsyncGate
+    # could emit into a tenant other than the obligation's, which is not a thing
+    # it can do and not a thing the ledger would accept.
     receiptgate_emission_timeout_ms: int = 500
     receiptgate_emission_buffer_size: int = 10000
     receiptgate_emission_buffer_path: str = ".asyncgate/receiptgate_emission_buffer.json"

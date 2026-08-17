@@ -100,7 +100,7 @@ jobs:
           mkdir -p _ctx/AsyncGate
           cp -r _legivellum _ctx/LegiVellum
           cp -r pyproject.toml README.md src alembic.ini alembic _ctx/AsyncGate/
-          docker build -f AsyncGate/Dockerfile -t asyncgate-ci _ctx
+          docker build -f Dockerfile -t asyncgate-ci _ctx
 
       # Phase 0 exit condition: canonical validation must work inside the
       # built image, with no checkout, mount, or sys.path help.
