@@ -337,6 +337,52 @@ class ReceiptGateClient:
             )
             return await self._buffer_receipt(receipt_data, error=str(exc))
 
+    async def list_custody(
+        self, recipient_ai: str, *, limit: int = 200
+    ) -> list[dict[str, Any]]:
+        """Obligations the ledger says this principal currently holds.
+
+        The read side of the notary, and AsyncGate's only source of truth about
+        custody. Local lease and task rows are a projection of this, not an
+        independent record: when the two disagree, this wins.
+
+        Deliberately not buffered or retried behind the circuit breaker. A stale
+        answer is worse than no answer here -- reconciliation acts on what it
+        reads -- so an unreachable ledger raises and the caller declines to
+        reconcile rather than reconciling against a guess.
+        """
+        if not settings.receiptgate_endpoint:
+            raise RuntimeError("receiptgate_endpoint not configured")
+
+        base_url = settings.receiptgate_endpoint.rstrip("/")
+        if not base_url.endswith("/mcp"):
+            base_url = f"{base_url}/mcp"
+
+        headers = {"Content-Type": "application/json"}
+        if settings.receiptgate_auth_token:
+            headers["Authorization"] = f"Bearer {settings.receiptgate_auth_token}"
+
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.post(
+                base_url,
+                json={
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "receiptgate.list_inbox",
+                        "arguments": {"recipient_ai": recipient_ai, "limit": limit},
+                    },
+                },
+                headers=headers,
+            )
+            response.raise_for_status()
+            data = response.json()
+
+        if "error" in data:
+            raise RuntimeError(f"ReceiptGate error reading custody: {data['error']}")
+        return list((data.get("result") or {}).get("receipts") or [])
+
     async def _emit_to_receiptgate(self, receipt_data: dict[str, Any]) -> dict[str, Any]:
         """POST receipt payload to ReceiptGate via MCP."""
         base_url = settings.receiptgate_endpoint.rstrip("/")

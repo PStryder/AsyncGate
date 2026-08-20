@@ -639,6 +639,21 @@ class LeaseRepository:
         # where rowcount lives. Narrow rather than disable attr-defined.
         return cast("CursorResult[Any]", result).rowcount > 0
 
+    async def list_for_worker(self, tenant_id: UUID, worker_id: str) -> list[Lease]:
+        """Every lease this worker currently holds, expired or not.
+
+        Reconciliation needs the local picture in full, including grants the
+        sweeper has not reached yet, because it is comparing that picture
+        against committed custody rather than deciding anything from it.
+        """
+        result = await self.session.execute(
+            select(LeaseTable).where(
+                LeaseTable.tenant_id == tenant_id,
+                LeaseTable.worker_id == worker_id,
+            )
+        )
+        return [self._row_to_model(row) for row in result.scalars().all()]
+
     async def get_expired(self, limit: int = 100, instance_id: str | None = None) -> list[Lease]:
         """
         Get expired leases for cleanup, optionally filtered by instance.
