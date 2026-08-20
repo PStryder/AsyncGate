@@ -201,9 +201,47 @@ def to_memorygate_receipt(receipt: Receipt, task: Task | None) -> dict[str, Any]
 
     if task:
         owner_principal = _principal_value(task.created_by)
-        from_principal = owner_principal
-        for_principal = owner_principal
         recipient_ai = task.principal_ai or _principal_value(receipt.to_)
+
+        # `for_principal` is the executor (taskee) and `from_principal` the
+        # principal performing this transition -- which is the requester for an
+        # acceptance and the executor for a discharge. Both were previously set
+        # to the task owner, which is `from_principal`'s meaning applied to
+        # both fields.
+        #
+        # That was survivable only while every identity in a flow was the same
+        # principal. Custody derives from `for_principal`, so the obligation was
+        # held by the requester; the moment an escalation moved custody to a
+        # real worker, no later receipt named that worker and every completion
+        # was refused ACTOR_NOT_CUSTODIAN. The ledger was right and AsyncGate
+        # was describing the wrong people.
+        #
+        # For all of these the worker is `receipt.from_`: it claims the lease,
+        # completes, fails, or cancels.
+        worker_bearing = {
+            ReceiptType.TASK_ACCEPTED,
+            ReceiptType.TASK_COMPLETED,
+            ReceiptType.TASK_FAILED,
+            ReceiptType.TASK_CANCELED,
+        }
+        if receipt.receipt_type in worker_bearing:
+            for_principal = _principal_value(receipt.from_)
+            # The requester proposes acceptance; the executor discharges it.
+            from_principal = (
+                owner_principal
+                if receipt.receipt_type == ReceiptType.TASK_ACCEPTED
+                else for_principal
+            )
+        elif receipt.receipt_type == ReceiptType.TASK_ESCALATED:
+            # Escalation is issued by whoever currently holds the obligation --
+            # the worker whose lease expired -- because only the custodian may
+            # hand it on. `receipt.from_` carries that principal.
+            for_principal = _principal_value(receipt.from_)
+            from_principal = for_principal
+        else:
+            for_principal = owner_principal
+            from_principal = owner_principal
+
         if receipt.receipt_type == ReceiptType.TASK_ACCEPTED:
             recipient_ai = _principal_value(receipt.from_)
     else:

@@ -969,6 +969,9 @@ class AsyncGateEngine:
                         escalation_class_label="policy",
                         obligation=obligation,
                         lease_id=lease.lease_id,
+                        issued_by=Principal(
+                            kind=PrincipalKind.WORKER, id=lease.worker_id
+                        ),
                     )
 
                 count += 1
@@ -1176,8 +1179,15 @@ class AsyncGateEngine:
         escalation_class_label: str = "other",
         obligation: Receipt | None = None,
         lease_id: UUID | None = None,
+        issued_by: Principal | None = None,
     ) -> Receipt | None:
-        """Emit a task.escalated receipt when escalation targets are configured."""
+        """Emit a task.escalated receipt when escalation targets are configured.
+
+        `issued_by` is the principal currently holding the obligation -- the
+        worker whose lease expired. Only the custodian may hand an obligation
+        on, so attributing the escalation to the service instead gets it refused
+        ACTOR_NOT_CUSTODIAN. AsyncGate emits it; the worker is who it is *from*.
+        """
         if not settings.escalation_enabled:
             return None
 
@@ -1205,7 +1215,7 @@ class AsyncGateEngine:
         return await self._emit_receipt(
             tenant_id=target_tenant_id,
             receipt_type=ReceiptType.TASK_ESCALATED,
-            from_principal=self._service_principal(),
+            from_principal=issued_by or self._service_principal(),
             to_principal=to_principal,
             task_id=task.task_id,
             lease_id=lease_id,
@@ -1278,8 +1288,16 @@ class AsyncGateEngine:
         )
 
         if settings.receipt_mode == ReceiptMode.RECEIPTGATE_INTEGRATED and settings.receiptgate_endpoint:
+            # TASK_ASSIGNED is deliberately absent. It is the OFFER, which
+            # transitions.v1.json declares an operational event, not a
+            # transition -- "offers are transient, acceptance creates
+            # obligation". Forwarding it made every task propose ACCEPT twice
+            # against one obligation_id: once for the offer and once for the
+            # worker's acceptance. The second was always refused
+            # OBLIGATION_ALREADY_ACCEPTED, and those refusals were what drove
+            # the circuit breaker open, after which legitimate receipts were
+            # buffered instead of committed.
             eligible = {
-                ReceiptType.TASK_ASSIGNED,
                 ReceiptType.TASK_ACCEPTED,
                 ReceiptType.TASK_COMPLETED,
                 ReceiptType.TASK_FAILED,

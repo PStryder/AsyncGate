@@ -238,3 +238,91 @@ def test_completed_receipt_externalizes_artifact_by_pointer() -> None:
     assert payload["artifact_checksum"] == ARTIFACT_REF["checksum"]
     assert payload["artifact_mime"] == ARTIFACT_REF["mime"]
     assert payload["artifact_refs"] == [ARTIFACT_REF]
+
+
+# --- who each receipt says is responsible ----------------------------------
+#
+# `for_principal` is the executor (taskee) and `from_principal` the principal
+# performing the transition. ReceiptGate derives custody from `for_principal`
+# and checks the actor against `from_principal`, so getting these wrong does not
+# produce a schema error -- it produces an obligation held by the wrong party
+# and completions refused ACTOR_NOT_CUSTODIAN.
+#
+# Both were previously set to the task owner. That is survivable only while
+# every identity in a flow is the same principal; escalation to a real worker
+# broke it, and the escalation demo could never complete.
+
+WORKER = Principal(kind=PrincipalKind.WORKER, id="worker-1")
+
+
+def _from_worker(receipt_type: ReceiptType, **kw: Any) -> Receipt:
+    """A receipt whose `from` is the worker, as the engine emits these."""
+    return Receipt(
+        receipt_id=uuid.uuid4(),
+        tenant_id=TENANT_ID,
+        receipt_type=receipt_type,
+        created_at=NOW,
+        task_id=TASK_ID,
+        body=kw.pop("body", {}) or {},
+        **{"from": WORKER, "to": AGENT},
+    )
+
+
+def test_acceptance_makes_the_worker_the_executor():
+    """Custody must land on the worker, not on the requester."""
+    payload = to_memorygate_receipt(_from_worker(ReceiptType.TASK_ACCEPTED), _task())
+    assert payload["for_principal"] == "worker-1"
+    # The requester proposes the acceptance; the executor is who takes it on.
+    assert payload["from_principal"] == "demo"
+
+
+def test_completion_is_performed_by_the_executor():
+    """The actor on a completion must be the principal that holds it.
+
+    ReceiptGate resolves the transition actor from `from_principal`. If that is
+    the task owner while custody sits with the worker, every completion is
+    refused -- which is exactly what happened once escalation moved custody.
+    """
+    result = _terminal_result(Outcome.SUCCEEDED)
+    payload = to_memorygate_receipt(
+        _from_worker(ReceiptType.TASK_COMPLETED), _task(result=result)
+    )
+    assert payload["for_principal"] == "worker-1"
+    assert payload["from_principal"] == "worker-1"
+
+
+def test_escalation_is_issued_by_the_current_holder():
+    """Only the custodian may hand an obligation on."""
+    payload = to_memorygate_receipt(
+        _from_worker(
+            ReceiptType.TASK_ESCALATED,
+            body={
+                "escalation_class": "policy",
+                "escalation_reason": "lease_expired",
+                "escalation_to": "fallback-worker",
+            },
+        ),
+        _task(),
+    )
+    assert payload["from_principal"] == "worker-1", "the holder escalates, not the service"
+    assert payload["escalation_to"] == "fallback-worker"
+    assert payload["recipient_ai"] == "fallback-worker", "routing invariant"
+
+
+def test_an_offer_is_not_forwarded_as_a_governance_transition():
+    """task.assigned is the OFFER operational event, not an ACCEPT.
+
+    Forwarding it made every task propose ACCEPT twice against one
+    obligation_id -- once for the offer, once for the worker's acceptance -- and
+    the second was always refused.
+    """
+    from asyncgate.engine import core
+
+    source = Path(core.__file__).read_text(encoding="utf-8")
+    start = source.index("eligible = {")
+    block = source[start : source.index("}", start)]
+    assert "TASK_ASSIGNED" not in block, (
+        "task.assigned is forwarded to the ledger again; it is an offer, and "
+        "an offer does not create an obligation"
+    )
+    assert "TASK_ACCEPTED" in block, "acceptance must still be forwarded"

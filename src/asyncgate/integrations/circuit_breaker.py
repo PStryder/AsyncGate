@@ -32,6 +32,13 @@ class CircuitBreakerConfig:
     half_open_max_calls: int = 3  # Test calls in half-open state
     success_threshold: int = 2  # Successes to close from half-open
 
+    # Exceptions that are answers rather than outages. A dependency that
+    # evaluates a request and rejects it is healthy -- it just said no -- so
+    # counting that toward the failure threshold trips the breaker on correct
+    # behaviour and then degrades every later call. Raised to the caller
+    # unchanged; simply not held against the dependency.
+    non_failure_exceptions: tuple[type[BaseException], ...] = ()
+
     # Callback hooks (optional)
     on_open: Callable[[], None] | None = None
     on_close: Callable[[], None] | None = None
@@ -167,6 +174,10 @@ class CircuitBreaker:
             result = await func(*args, **kwargs) if asyncio.iscoroutinefunction(func) else func(*args, **kwargs)
             await self._on_success()
             return result
+        except self.config.non_failure_exceptions:
+            # A verdict, not an outage. Deliberately recorded as neither a
+            # success nor a failure: it says nothing about reachability.
+            raise
         except Exception as e:
             await self._on_failure(e)
             raise

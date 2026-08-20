@@ -25,6 +25,41 @@ from asyncgate.utils.time import utc_now
 logger = logging.getLogger(__name__)
 
 
+class ReceiptRefused(Exception):
+    """The ledger evaluated the proposal and rejected it.
+
+    Distinct from a delivery failure. A timeout or a connection error means the
+    outcome is unknown and retrying is right; a refusal means the answer is
+    known and will not change, so it must neither be retried nor counted toward
+    the circuit breaker's failure threshold.
+    """
+
+    def __init__(self, code: str, message: str):
+        super().__init__(message)
+        self.code = code
+
+
+# Typed governance codes from transitions.v1.json and the authority model. Each
+# one says the proposal was wrong, not that the ledger was unreachable.
+GOVERNANCE_REFUSALS = frozenset({
+    "OBLIGATION_ALREADY_ACCEPTED",
+    "OBLIGATION_ALREADY_EXISTS",
+    "OBLIGATION_ALREADY_TERMINATED",
+    "OBLIGATION_NOT_RECOVERABLE",
+    "ACTOR_NOT_PERMITTED",
+    "COMPLETE_WITHOUT_ACCEPT",
+    "ESCALATE_WITHOUT_ACCEPT",
+    "ACTOR_NOT_CUSTODIAN",
+    "OBLIGATION_ID_REQUIRED",
+    "IDENTITY_MISMATCH",
+    "TENANT_MISMATCH",
+    "NOT_PERMITTED",
+    "NOT_VISIBLE",
+    "ROUTING_INVARIANT_VIOLATION",
+    "validation_failed",
+})
+
+
 @dataclass
 class BufferedReceipt:
     """Durable receipt buffer item."""
@@ -101,6 +136,8 @@ class ReceiptGateClient:
             timeout_seconds=settings.receiptgate_circuit_breaker_timeout_seconds,
             half_open_max_calls=settings.receiptgate_circuit_breaker_half_open_max_calls,
             success_threshold=settings.receiptgate_circuit_breaker_success_threshold,
+            # A governance refusal means the ledger was reached and answered.
+            non_failure_exceptions=(ReceiptRefused,),
             on_open=lambda: logger.error("ReceiptGate circuit breaker opened"),
             on_close=lambda: logger.info("ReceiptGate circuit breaker closed"),
             on_half_open=lambda: logger.info("ReceiptGate circuit breaker half-open"),
@@ -212,6 +249,29 @@ class ReceiptGateClient:
 
         try:
             return await self._emit_with_circuit(receipt_data, use_fallback=True)
+        except ReceiptRefused as refusal:
+            # A refusal is a verdict, not a failure to deliver. The ledger
+            # received the proposal, evaluated it, and said no; retrying sends
+            # the identical receipt to the identical rule and gets the identical
+            # answer, and buffering it stores a receipt that will never commit.
+            #
+            # Treating these as transport failures is what made a correct
+            # refusal degrade the whole stack: a handful of them opened the
+            # circuit, and every subsequent receipt -- including legitimate ones
+            # -- was buffered while AsyncGate went on reporting success.
+            logger.warning(
+                "ReceiptGate refused receipt %s (%s): %s",
+                receipt_data.get("receipt_id"),
+                refusal.code,
+                refusal,
+                extra={
+                    "receipt_id": receipt_data.get("receipt_id"),
+                    "obligation_id": receipt_data.get("obligation_id"),
+                    "phase": receipt_data.get("phase"),
+                    "refusal_code": refusal.code,
+                },
+            )
+            return {"status": "refused", "code": refusal.code, "detail": str(refusal)}
         except Exception as exc:
             logger.warning(
                 "ReceiptGate emission failed, buffering for replay",
@@ -244,7 +304,11 @@ class ReceiptGateClient:
             response.raise_for_status()
             data = response.json()
             if "error" in data:
-                raise RuntimeError(f"ReceiptGate error: {data['error']}")
+                error = data["error"] or {}
+                code = error.get("code") if isinstance(error, dict) else None
+                if code in GOVERNANCE_REFUSALS:
+                    raise ReceiptRefused(str(code), f"ReceiptGate refused: {error}")
+                raise RuntimeError(f"ReceiptGate error: {error}")
             return data.get("result", {})
 
     def _retry_delay_seconds(self, retry_count: int) -> int:
