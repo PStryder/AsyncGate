@@ -499,17 +499,27 @@ class LeaseRepository:
         task_id: UUID,
         lease_id: UUID,
         worker_id: str,
+        *,
+        for_update: bool = False,
     ) -> Lease | None:
-        """Validate a lease is active and owned by worker."""
-        result = await self.session.execute(
-            select(LeaseTable).where(
-                LeaseTable.tenant_id == tenant_id,
-                LeaseTable.task_id == task_id,
-                LeaseTable.lease_id == lease_id,
-                LeaseTable.worker_id == worker_id,
-                LeaseTable.expires_at > utc_now(),
-            )
+        """Validate a lease is active and owned by worker.
+
+        `for_update` takes a row lock, and callers that go on to act on the
+        result must use it. Without it this is a read whose answer can be stale
+        before it is used: the sweeper can expire the lease and a second worker
+        can claim a new one in the window between validating and writing, so the
+        first worker proceeds on a lease that no longer exists.
+        """
+        query = select(LeaseTable).where(
+            LeaseTable.tenant_id == tenant_id,
+            LeaseTable.task_id == task_id,
+            LeaseTable.lease_id == lease_id,
+            LeaseTable.worker_id == worker_id,
+            LeaseTable.expires_at > utc_now(),
         )
+        if for_update:
+            query = query.with_for_update()
+        result = await self.session.execute(query)
         row = result.scalar_one_or_none()
         return self._row_to_model(row) if row else None
 
@@ -604,14 +614,27 @@ class LeaseRepository:
             renewal_count=new_renewal_count,
         )
 
-    async def release(self, tenant_id: UUID, task_id: UUID) -> bool:
-        """Release a lease."""
-        result = await self.session.execute(
-            delete(LeaseTable).where(
-                LeaseTable.tenant_id == tenant_id,
-                LeaseTable.task_id == task_id,
-            )
-        )
+    async def release(
+        self, tenant_id: UUID, task_id: UUID, lease_id: UUID | None = None
+    ) -> bool:
+        """Release a lease, by identity when the caller knows which one.
+
+        Deleting by `task_id` alone deletes whatever lease currently exists for
+        that task, which is not necessarily the caller's. A worker whose lease
+        expired mid-flight would finish its call and delete the *next* worker's
+        lease -- silently revoking a grant that had been correctly issued to
+        somebody else.
+
+        `lease_id` is optional only for the sweeper, which legitimately releases
+        a lease it did not hold; every caller acting on its own lease passes it.
+        """
+        conditions = [
+            LeaseTable.tenant_id == tenant_id,
+            LeaseTable.task_id == task_id,
+        ]
+        if lease_id is not None:
+            conditions.append(LeaseTable.lease_id == lease_id)
+        result = await self.session.execute(delete(LeaseTable).where(*conditions))
         # execute() is typed Result; DML actually yields CursorResult, which is
         # where rowcount lives. Narrow rather than disable attr-defined.
         return cast("CursorResult[Any]", result).rowcount > 0

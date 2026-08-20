@@ -724,6 +724,28 @@ class AsyncGateEngine:
 
         # P0.2: ATOMIC BLOCK - All or nothing
         async with self.session.begin_nested():  # SAVEPOINT
+            # Re-validate under a row lock, inside the transaction, before
+            # touching anything. The check above is a cheap early rejection
+            # whose answer can be stale by the time it is used: the sweeper can
+            # expire this lease and another worker can claim a new one in the
+            # window between validating and writing. Acting on that stale answer
+            # overwrote a requeued task and deleted the next worker's grant.
+            lease = await self.leases.validate(
+                tenant_id, task_id, lease_id, worker_id, for_update=True
+            )
+            if not lease:
+                raise LeaseInvalidOrExpired(str(task_id), str(lease_id))
+
+            # Re-read the task under that lock too, so the status precondition
+            # is evaluated against committed state rather than a pre-read copy.
+            task = await self.tasks.get(tenant_id, task_id)
+            if not task:
+                raise TaskNotFound(str(task_id))
+            if not task.can_transition_to(TaskStatus.SUCCEEDED):
+                raise InvalidStateTransition(
+                    task.status.value, TaskStatus.SUCCEEDED.value
+                )
+
             # 1. Update task to succeeded
             task_result = TaskResult(
                 outcome=Outcome.SUCCEEDED,
@@ -733,8 +755,9 @@ class AsyncGateEngine:
             )
             await self.tasks.update_status(tenant_id, task_id, TaskStatus.SUCCEEDED, task_result)
 
-            # 2. Release lease
-            await self.leases.release(tenant_id, task_id)
+            # 2. Release lease -- by identity, so this can only ever release
+            # the grant validated above and never a successor's.
+            await self.leases.release(tenant_id, task_id, lease_id)
 
             # 3. Emit task.completed receipt
             worker_principal = Principal(kind=PrincipalKind.WORKER, id=worker_id)
@@ -801,8 +824,26 @@ class AsyncGateEngine:
 
         # P0.2: ATOMIC BLOCK - All state changes + receipts
         async with self.session.begin_nested():  # SAVEPOINT
-            # 1. Release lease first (common to both paths)
-            await self.leases.release(tenant_id, task_id)
+            # Re-validate under a row lock, inside the transaction, before
+            # touching anything. The check above is a cheap early rejection
+            # whose answer can be stale by the time it is used: the sweeper can
+            # expire this lease and another worker can claim a new one in the
+            # window between validating and writing. Acting on that stale answer
+            # overwrote a requeued task and deleted the next worker's grant.
+            lease = await self.leases.validate(
+                tenant_id, task_id, lease_id, worker_id, for_update=True
+            )
+            if not lease:
+                raise LeaseInvalidOrExpired(str(task_id), str(lease_id))
+
+            # Re-read the task under that lock too, so the status precondition
+            # is evaluated against committed state rather than a pre-read copy.
+            task = await self.tasks.get(tenant_id, task_id)
+            if not task:
+                raise TaskNotFound(str(task_id))
+
+            # 1. Release lease first (common to both paths), by identity.
+            await self.leases.release(tenant_id, task_id, lease_id)
 
             worker_principal = Principal(kind=PrincipalKind.WORKER, id=worker_id)
 
@@ -931,7 +972,9 @@ class AsyncGateEngine:
                     )
 
                     # 2. Release expired lease
-                    await self.leases.release(lease.tenant_id, lease.task_id)
+                    await self.leases.release(
+                        lease.tenant_id, lease.task_id, lease.lease_id
+                    )
 
                     # 3. Emit lease.expired receipt to task owner
                     service_principal = self._service_principal()
