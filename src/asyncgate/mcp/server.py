@@ -50,9 +50,8 @@ TOOL_DEFS: list[dict[str, Any]] = [
                 "agent_version": {"type": "string", "description": "Agent version"},
                 "since_receipt_id": {"type": "string", "description": "Cursor for incremental fetch"},
                 "max_items": {"type": "integer", "description": "Max items to return"},
-                "tenant_id": {"type": "string", "description": "Tenant ID"},
             },
-            "required": ["agent_id", "tenant_id"],
+            "required": ["agent_id"],
         }),
     },
     {
@@ -77,9 +76,8 @@ TOOL_DEFS: list[dict[str, Any]] = [
                 "retry_backoff_seconds": {"type": "integer", "description": "Retry backoff"},
                 "delay_seconds": {"type": "integer", "description": "Delay before eligible"},
                 "agent_id": {"type": "string", "description": "Creating agent ID"},
-                "tenant_id": {"type": "string", "description": "Tenant ID"},
             },
-            "required": ["type", "principal_ai", "agent_id", "tenant_id"],
+            "required": ["type", "principal_ai", "agent_id"],
         }),
     },
     {
@@ -89,9 +87,8 @@ TOOL_DEFS: list[dict[str, Any]] = [
             "type": "object",
             "properties": {
                 "task_id": {"type": "string", "description": "Task UUID"},
-                "tenant_id": {"type": "string", "description": "Tenant ID"},
             },
-            "required": ["task_id", "tenant_id"],
+            "required": ["task_id"],
         }),
     },
     {
@@ -104,9 +101,8 @@ TOOL_DEFS: list[dict[str, Any]] = [
                 "type": {"type": "string", "description": "Filter by type"},
                 "limit": {"type": "integer", "description": "Max results"},
                 "cursor": {"type": "string", "description": "Pagination cursor"},
-                "tenant_id": {"type": "string", "description": "Tenant ID"},
             },
-            "required": ["tenant_id"],
+            "required": [],
         }),
     },
     {
@@ -118,9 +114,8 @@ TOOL_DEFS: list[dict[str, Any]] = [
                 "task_id": {"type": "string", "description": "Task UUID"},
                 "reason": {"type": "string", "description": "Cancellation reason"},
                 "agent_id": {"type": "string", "description": "Agent ID"},
-                "tenant_id": {"type": "string", "description": "Tenant ID"},
             },
-            "required": ["task_id", "agent_id", "tenant_id"],
+            "required": ["task_id", "agent_id"],
         }),
     },
     {
@@ -133,9 +128,8 @@ TOOL_DEFS: list[dict[str, Any]] = [
                 "to_id": {"type": "string", "description": "Recipient ID"},
                 "since_receipt_id": {"type": "string", "description": "Cursor"},
                 "limit": {"type": "integer", "description": "Max results"},
-                "tenant_id": {"type": "string", "description": "Tenant ID"},
             },
-            "required": ["to_kind", "to_id", "tenant_id"],
+            "required": ["to_kind", "to_id"],
         }),
     },
     {
@@ -150,9 +144,8 @@ TOOL_DEFS: list[dict[str, Any]] = [
                 "task_status": {"type": "string", "description": "Filter by task status"},
                 "since_receipt_id": {"type": "string", "description": "Cursor"},
                 "limit": {"type": "integer", "description": "Max results"},
-                "tenant_id": {"type": "string", "description": "Tenant ID"},
             },
-            "required": ["tenant_id"],
+            "required": [],
         }),
     },
     {
@@ -163,9 +156,8 @@ TOOL_DEFS: list[dict[str, Any]] = [
             "properties": {
                 "receipt_id": {"type": "string", "description": "Receipt UUID"},
                 "agent_id": {"type": "string", "description": "Agent ID"},
-                "tenant_id": {"type": "string", "description": "Tenant ID"},
             },
-            "required": ["receipt_id", "agent_id", "tenant_id"],
+            "required": ["receipt_id", "agent_id"],
         }),
     },
     {
@@ -175,9 +167,8 @@ TOOL_DEFS: list[dict[str, Any]] = [
             "type": "object",
             "properties": {
                 "parent_receipt_id": {"type": "string", "description": "Parent receipt UUID"},
-                "tenant_id": {"type": "string", "description": "Tenant ID"},
             },
-            "required": ["parent_receipt_id", "tenant_id"],
+            "required": ["parent_receipt_id"],
         }),
     },
     {
@@ -191,9 +182,8 @@ TOOL_DEFS: list[dict[str, Any]] = [
                 "accept_types": {"type": "array", "items": {"type": "string"}, "description": "Task types to accept"},
                 "max_tasks": {"type": "integer", "description": "Max tasks to claim"},
                 "lease_ttl_seconds": {"type": "integer", "description": "Lease TTL"},
-                "tenant_id": {"type": "string", "description": "Tenant ID"},
             },
-            "required": ["worker_id", "tenant_id"],
+            "required": ["worker_id"],
         }),
     },
     {
@@ -206,9 +196,8 @@ TOOL_DEFS: list[dict[str, Any]] = [
                 "task_id": {"type": "string", "description": "Task UUID"},
                 "lease_id": {"type": "string", "description": "Lease UUID"},
                 "extend_by_seconds": {"type": "integer", "description": "Extension duration"},
-                "tenant_id": {"type": "string", "description": "Tenant ID"},
             },
-            "required": ["worker_id", "task_id", "lease_id", "tenant_id"],
+            "required": ["worker_id", "task_id", "lease_id"],
         }),
     },
     {
@@ -221,9 +210,8 @@ TOOL_DEFS: list[dict[str, Any]] = [
                 "task_id": {"type": "string", "description": "Task UUID"},
                 "lease_id": {"type": "string", "description": "Lease UUID"},
                 "progress": {"type": "object", "description": "Progress data"},
-                "tenant_id": {"type": "string", "description": "Tenant ID"},
             },
-            "required": ["worker_id", "task_id", "lease_id", "progress", "tenant_id"],
+            "required": ["worker_id", "task_id", "lease_id", "progress"],
         }),
     },
     {
@@ -237,9 +225,8 @@ TOOL_DEFS: list[dict[str, Any]] = [
                 "lease_id": {"type": "string", "description": "Lease UUID"},
                 "result": {"type": "object", "description": "Task result"},
                 "artifacts": {"type": "object", "description": "Result artifacts"},
-                "tenant_id": {"type": "string", "description": "Tenant ID"},
             },
-            "required": ["worker_id", "task_id", "lease_id", "result", "tenant_id"],
+            "required": ["worker_id", "task_id", "lease_id", "result"],
         }),
     },
     {
@@ -253,9 +240,8 @@ TOOL_DEFS: list[dict[str, Any]] = [
                 "lease_id": {"type": "string", "description": "Lease UUID"},
                 "error": {"type": "object", "description": "Error details"},
                 "retryable": {"type": "boolean", "description": "Whether to retry"},
-                "tenant_id": {"type": "string", "description": "Tenant ID"},
             },
-            "required": ["worker_id", "task_id", "lease_id", "error", "tenant_id"],
+            "required": ["worker_id", "task_id", "lease_id", "error"],
         }),
     },
     {
@@ -310,14 +296,14 @@ async def _handle_tool(name: str, arguments: dict[str, Any]) -> Any:
                 instance_id=arguments.get("agent_instance_id"),
             )
             relationship = await engine.relationships.upsert(
-                tenant_id=UUID(arguments["tenant_id"]),
+                tenant_id=UUID(auth.tenant_id),
                 principal_kind=principal.kind,
                 principal_id=principal.id,
                 principal_instance_id=principal.instance_id,
             )
 
             obligations_data = await engine.list_open_obligations(
-                tenant_id=UUID(arguments["tenant_id"]),
+                tenant_id=UUID(auth.tenant_id),
                 principal=principal,
                 since_receipt_id=UUID(arguments["since_receipt_id"]) if arguments.get("since_receipt_id") else None,
                 limit=arguments.get("max_items") or settings.default_bootstrap_max_items,
@@ -348,7 +334,7 @@ async def _handle_tool(name: str, arguments: dict[str, Any]) -> Any:
                 id=arguments["agent_id"],
             )
             return await engine.create_task(
-                tenant_id=UUID(arguments["tenant_id"]),
+                tenant_id=UUID(auth.tenant_id),
                 type=arguments["type"],
                 payload=arguments.get("payload") or {},
                 payload_pointer=arguments.get("payload_pointer"),
@@ -367,13 +353,13 @@ async def _handle_tool(name: str, arguments: dict[str, Any]) -> Any:
 
         elif name == "asyncgate.get_task":
             return await engine.get_task(
-                tenant_id=UUID(arguments["tenant_id"]),
+                tenant_id=UUID(auth.tenant_id),
                 task_id=UUID(arguments["task_id"]),
             )
 
         elif name == "asyncgate.list_tasks":
             return await engine.list_tasks(
-                tenant_id=UUID(arguments["tenant_id"]),
+                tenant_id=UUID(auth.tenant_id),
                 status=arguments.get("status"),
                 type=arguments.get("type"),
                 limit=arguments.get("limit"),
@@ -386,7 +372,7 @@ async def _handle_tool(name: str, arguments: dict[str, Any]) -> Any:
                 id=arguments["agent_id"],
             )
             return await engine.cancel_task(
-                tenant_id=UUID(arguments["tenant_id"]),
+                tenant_id=UUID(auth.tenant_id),
                 task_id=UUID(arguments["task_id"]),
                 principal=principal,
                 reason=arguments.get("reason"),
@@ -395,7 +381,7 @@ async def _handle_tool(name: str, arguments: dict[str, Any]) -> Any:
 
         elif name == "asyncgate.list_receipts":
             return await engine.list_receipts(
-                tenant_id=UUID(arguments["tenant_id"]),
+                tenant_id=UUID(auth.tenant_id),
                 to_kind=arguments["to_kind"],
                 to_id=arguments["to_id"],
                 since_receipt_id=UUID(arguments["since_receipt_id"]) if arguments.get("since_receipt_id") else None,
@@ -406,7 +392,7 @@ async def _handle_tool(name: str, arguments: dict[str, Any]) -> Any:
             receipt_type = arguments.get("receipt_type")
             task_status = arguments.get("task_status")
             return await engine.list_receipts_ledger(
-                tenant_id=UUID(arguments["tenant_id"]),
+                tenant_id=UUID(auth.tenant_id),
                 task_id=UUID(arguments["task_id"]) if arguments.get("task_id") else None,
                 lease_id=UUID(arguments["lease_id"]) if arguments.get("lease_id") else None,
                 receipt_type=ReceiptType(receipt_type) if receipt_type else None,
@@ -421,7 +407,7 @@ async def _handle_tool(name: str, arguments: dict[str, Any]) -> Any:
                 id=arguments["agent_id"],
             )
             return await engine.ack_receipt(
-                tenant_id=UUID(arguments["tenant_id"]),
+                tenant_id=UUID(auth.tenant_id),
                 receipt_id=UUID(arguments["receipt_id"]),
                 principal=principal,
             )
@@ -430,7 +416,7 @@ async def _handle_tool(name: str, arguments: dict[str, Any]) -> Any:
             return {
                 "parent_receipt_id": arguments["parent_receipt_id"],
                 "has_terminator": await engine.has_terminator(
-                    tenant_id=UUID(arguments["tenant_id"]),
+                    tenant_id=UUID(auth.tenant_id),
                     parent_receipt_id=UUID(arguments["parent_receipt_id"]),
                 ),
             }
@@ -438,7 +424,7 @@ async def _handle_tool(name: str, arguments: dict[str, Any]) -> Any:
         # TASKEE tools
         elif name == "asyncgate.lease_next":
             return await engine.lease_next(
-                tenant_id=UUID(arguments["tenant_id"]),
+                tenant_id=UUID(auth.tenant_id),
                 worker_id=arguments["worker_id"],
                 capabilities=arguments.get("capabilities"),
                 accept_types=arguments.get("accept_types"),
@@ -448,7 +434,7 @@ async def _handle_tool(name: str, arguments: dict[str, Any]) -> Any:
 
         elif name == "asyncgate.renew_lease":
             return await engine.renew_lease(
-                tenant_id=UUID(arguments["tenant_id"]),
+                tenant_id=UUID(auth.tenant_id),
                 worker_id=arguments["worker_id"],
                 task_id=UUID(arguments["task_id"]),
                 lease_id=UUID(arguments["lease_id"]),
@@ -457,7 +443,7 @@ async def _handle_tool(name: str, arguments: dict[str, Any]) -> Any:
 
         elif name == "asyncgate.report_progress":
             return await engine.report_progress(
-                tenant_id=UUID(arguments["tenant_id"]),
+                tenant_id=UUID(auth.tenant_id),
                 worker_id=arguments["worker_id"],
                 task_id=UUID(arguments["task_id"]),
                 lease_id=UUID(arguments["lease_id"]),
@@ -466,7 +452,7 @@ async def _handle_tool(name: str, arguments: dict[str, Any]) -> Any:
 
         elif name == "asyncgate.complete":
             return await engine.complete(
-                tenant_id=UUID(arguments["tenant_id"]),
+                tenant_id=UUID(auth.tenant_id),
                 worker_id=arguments["worker_id"],
                 task_id=UUID(arguments["task_id"]),
                 lease_id=UUID(arguments["lease_id"]),
@@ -476,7 +462,7 @@ async def _handle_tool(name: str, arguments: dict[str, Any]) -> Any:
 
         elif name == "asyncgate.fail":
             return await engine.fail(
-                tenant_id=UUID(arguments["tenant_id"]),
+                tenant_id=UUID(auth.tenant_id),
                 worker_id=arguments["worker_id"],
                 task_id=UUID(arguments["task_id"]),
                 lease_id=UUID(arguments["lease_id"]),

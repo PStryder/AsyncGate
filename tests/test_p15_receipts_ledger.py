@@ -3,13 +3,16 @@ Receipt ledger endpoint tests.
 """
 
 import pytest
+
+from asyncgate.config import settings
 from uuid import uuid4
 
 
 @pytest.mark.asyncio
 async def test_receipts_ledger_endpoint_returns_memorygate_shape(client):
     """Receipt ledger returns MemoryGate-style receipt records."""
-    tenant_id = str(uuid4())
+    # Derived from the credential now; naming a different one is refused.
+    tenant_id = settings.default_tenant_id
     create_response = await client.post(
         "/mcp",
         json={
@@ -26,7 +29,6 @@ async def test_receipts_ledger_endpoint_returns_memorygate_shape(client):
                     "expected_outcome_kind": "response_text",
                     "expected_artifact_mime": "text/plain",
                     "agent_id": "test-agent",
-                    "tenant_id": tenant_id,
                 },
             },
         },
@@ -42,7 +44,7 @@ async def test_receipts_ledger_endpoint_returns_memorygate_shape(client):
             "method": "tools/call",
             "params": {
                 "name": "asyncgate.list_receipts_ledger",
-                "arguments": {"task_id": task_id, "tenant_id": tenant_id},
+                "arguments": {"task_id": task_id},
             },
         },
     )

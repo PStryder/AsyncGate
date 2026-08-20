@@ -37,15 +37,42 @@ def _load_jwt_key() -> str:
     raise UnauthorizedError("JWT verification key not configured")
 
 
+def _resolve_tenant(from_credential: str | None, claimed: str | None) -> str:
+    """The tenant this request acts in.
+
+    The credential decides. A claim that agrees is redundant; a claim that
+    disagrees is refused, because silently overwriting it would let a caller
+    believe it was operating somewhere it was not.
+    """
+    resolved = from_credential or settings.default_tenant_id
+    if claimed and claimed != resolved:
+        raise UnauthorizedError(
+            f"request claims tenant_id={claimed!r} but the authenticated "
+            f"credential is scoped to {resolved!r}"
+        )
+    return resolved
+
+
 async def verify_auth_token(
     token: str | None,
     session: AsyncSession,
     tenant_id: str | None = None,
     principal_id: str | None = None,
 ) -> AuthContext:
-    """Verify MCP auth token via JWT or API key."""
+    """Verify MCP auth token via JWT or API key, and resolve the tenant.
+
+    `tenant_id` is what the caller *claims*. It is never trusted: the returned
+    context carries the tenant derived from the credential, and a claim that
+    contradicts it is refused rather than silently overwritten, so a caller
+    learns its claim was wrong instead of believing it was honoured.
+    """
     if settings.allow_insecure_dev and settings.env == Environment.DEVELOPMENT:
-        return AuthContext(user=None, auth_type="insecure_dev", is_internal=False)
+        return AuthContext(
+            user=None,
+            auth_type="insecure_dev",
+            is_internal=False,
+            tenant_id=_resolve_tenant(None, tenant_id),
+        )
 
     if not token:
         raise UnauthorizedError("Missing authorization token")
@@ -67,20 +94,28 @@ async def verify_auth_token(
 
         if principal_id and subject and subject != principal_id:
             raise UnauthorizedError("JWT subject does not match principal")
-        if tenant_id and tenant_claim and tenant_claim != tenant_id:
-            raise UnauthorizedError("JWT tenant does not match request")
 
         is_internal = bool(payload.get("is_admin") or payload.get("admin"))
-        return AuthContext(user=None, auth_type="jwt", is_internal=is_internal)
+        return AuthContext(
+            user=None,
+            auth_type="jwt",
+            is_internal=is_internal,
+            tenant_id=_resolve_tenant(tenant_claim, tenant_id),
+        )
 
     if token.startswith(API_KEY_PREFIX):
         headers = {"authorization": f"Bearer {token}"}
         user = await verify_request_api_key(session, headers)
         if user and user.is_active:
+            # The User model has no tenant column, so a DB API key names no
+            # tenant. Such a deployment is single-tenant and resolves to the
+            # configured default; giving keys their own tenant needs a schema
+            # change, not a different value here.
             return AuthContext(
                 user=user,
                 auth_type="db_api_key",
                 is_internal=bool(user.is_admin),
+                tenant_id=_resolve_tenant(None, tenant_id),
             )
         raise UnauthorizedError("Invalid API key")
 

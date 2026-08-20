@@ -108,6 +108,13 @@ class Settings(BaseSettings):
     # receipts carry the obligation's own tenant. Keeping it implied AsyncGate
     # could emit into a tenant other than the obligation's, which is not a thing
     # it can do and not a thing the ledger would accept.
+    # The tenant used when the credential does not name one. JWTs carry a
+    # tenant claim; DB API keys currently cannot, because the User model has no
+    # tenant column, so those deployments are single-tenant and this is that
+    # tenant. It is a fallback for an unnamed tenant, never an override for a
+    # named one: a credential that names a tenant always wins.
+    default_tenant_id: str = "00000000-0000-0000-0000-000000000000"
+
     receiptgate_emission_timeout_ms: int = 500
     receiptgate_emission_buffer_size: int = 10000
     receiptgate_emission_buffer_path: str = ".asyncgate/receiptgate_emission_buffer.json"

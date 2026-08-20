@@ -9,8 +9,10 @@ That would be a violation of core design principles.
 """
 
 import pytest
+
+from asyncgate.config import settings
 from httpx import AsyncClient
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from asyncgate.models import Principal, PrincipalKind, ReceiptType
 from asyncgate.principals import SYSTEM_PRINCIPAL_ID
@@ -96,7 +98,11 @@ async def test_obligations_open_api_returns_flat_json(
     Regression guard: Ensures API layer doesn't introduce bucketing.
     """
     receipts = ReceiptRepository(session)
-    tenant_id = uuid4()
+    # The tenant comes from the credential, not from the arguments. In insecure
+    # dev that is settings.default_tenant_id, so the fixture data is created
+    # there rather than in a tenant the caller names -- naming one is now
+    # refused, which is the point.
+    tenant_id = UUID(settings.default_tenant_id)
     agent = Principal(kind=PrincipalKind.AGENT, id="test-agent")
     system = Principal(kind=PrincipalKind.SYSTEM, id=SYSTEM_PRINCIPAL_ID)
     
@@ -124,7 +130,6 @@ async def test_obligations_open_api_returns_flat_json(
                 "name": "asyncgate.bootstrap",
                 "arguments": {
                     "agent_id": agent.id,
-                    "tenant_id": str(tenant_id),
                 },
             },
         },
