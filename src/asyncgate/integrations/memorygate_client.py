@@ -25,6 +25,17 @@ from asyncgate.utils.time import utc_now
 logger = logging.getLogger(__name__)
 
 
+class ReceiptUnbufferable(Exception):
+    """The ledger is unreachable and this transition may not wait in a queue.
+
+    Acceptance is the mutual-exclusion point -- the moment two candidates
+    resolve to one holder -- and that resolution cannot be made locally by
+    either candidate. A buffered claim on a contested obligation is a second
+    custodian waiting to happen, so if the notary cannot be reached, acceptance
+    fails. It does not queue.
+    """
+
+
 class ReceiptRefused(Exception):
     """The ledger evaluated the proposal and rejected it.
 
@@ -37,6 +48,33 @@ class ReceiptRefused(Exception):
     def __init__(self, code: str, message: str):
         super().__init__(message)
         self.code = code
+
+
+# The transition each phase AsyncGate emits represents. `escalate` is ESCALATE
+# rather than RECOVER because AsyncGate escalates *as the current custodian* --
+# it never reclaims an obligation on someone else's behalf, which is what
+# RECOVER is for and why RECOVER is not bufferable.
+_TRANSITION_FOR_PHASE = {
+    "accepted": "ACCEPT",
+    "complete": "COMPLETE",
+    "escalate": "ESCALATE",
+}
+
+
+def _phase_may_buffer(phase: str | None) -> bool:
+    """Whether a receipt of this phase may wait in the durable outbox.
+
+    Decided by transitions.v1.json, not by a list here: `bufferable` is declared
+    per transition in the model, and a second copy of that judgement in AsyncGate
+    is a second thing to keep true.
+
+    An unrecognised phase is treated as unbufferable. Failing loudly on a
+    transition nobody has classified is the safe direction.
+    """
+    from legivellum.transitions import may_buffer
+
+    name = _TRANSITION_FOR_PHASE.get(phase or "")
+    return may_buffer(name) if name else False
 
 
 # Typed governance codes from transitions.v1.json and the authority model. Each
@@ -273,6 +311,26 @@ class ReceiptGateClient:
             )
             return {"status": "refused", "code": refusal.code, "detail": str(refusal)}
         except Exception as exc:
+            phase = receipt_data.get("phase")
+            if not _phase_may_buffer(phase):
+                # Unreachable ledger, and this transition cannot wait. Raised
+                # rather than buffered so the caller fails instead of
+                # proceeding as though a contested claim had been granted.
+                logger.error(
+                    "ReceiptGate unreachable and %r may not buffer: %s",
+                    phase,
+                    exc,
+                    extra={
+                        "receipt_id": receipt_data.get("receipt_id"),
+                        "obligation_id": receipt_data.get("obligation_id"),
+                        "phase": phase,
+                    },
+                )
+                raise ReceiptUnbufferable(
+                    f"{phase!r} may not be buffered and ReceiptGate is "
+                    f"unreachable: {exc}"
+                ) from exc
+
             logger.warning(
                 "ReceiptGate emission failed, buffering for replay",
                 extra={"error": str(exc)},
@@ -357,10 +415,20 @@ class ReceiptGateClient:
     async def _fallback_to_buffer(self, receipt_data: dict[str, Any]) -> dict[str, Any]:
         """
         Fallback when circuit is open - persist and replay later.
+
+        An open circuit is still an unreachable ledger, so a transition that may
+        not be buffered may not take this path either. Guarding only the
+        exception path above would leave the same hole open whenever the breaker
+        happened to be tripped.
         """
+        phase = receipt_data.get("phase")
+        if not _phase_may_buffer(phase):
+            raise ReceiptUnbufferable(
+                f"{phase!r} may not be buffered and the ReceiptGate circuit is open"
+            )
         logger.warning(
             "ReceiptGate circuit open, buffering receipt",
-            extra={"phase": receipt_data.get("phase", "unknown")},
+            extra={"phase": phase or "unknown"},
         )
         return await self._buffer_receipt(receipt_data, error="circuit_open")
 

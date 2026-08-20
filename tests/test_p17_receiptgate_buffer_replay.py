@@ -1,4 +1,13 @@
-"""P1.4 tests: durable ReceiptGate buffering and replay."""
+"""P1.4 tests: durable ReceiptGate buffering and replay.
+
+These use `complete`, not `accepted`. Acceptance is not bufferable: it is the
+mutual-exclusion point, and a claim that waits in a local queue while the ledger
+is unreachable is a second custodian waiting to happen. `transitions.v1.json`
+declares which transitions may buffer, and the client reads it from there.
+
+Completion is single-writer -- only the established custodian can issue one --
+so buffering it asserts nothing false about who holds what.
+"""
 
 from pathlib import Path
 
@@ -38,7 +47,7 @@ async def test_receipt_emission_failure_is_durably_buffered(
 
     monkeypatch.setattr(client, "_emit_to_receiptgate", _failing_emit)
 
-    result = await client.emit_receipt({"receipt_id": "r-001", "phase": "accepted"})
+    result = await client.emit_receipt({"receipt_id": "r-001", "phase": "complete"})
     stats = client.get_buffer_stats()
 
     assert result["status"] == "buffered"
@@ -63,7 +72,7 @@ async def test_buffer_reloads_after_client_restart(
         raise RuntimeError("receiptgate unavailable")
 
     monkeypatch.setattr(client, "_emit_to_receiptgate", _failing_emit)
-    await client.emit_receipt({"receipt_id": "r-002", "phase": "accepted"})
+    await client.emit_receipt({"receipt_id": "r-002", "phase": "complete"})
     await client.close()
 
     restarted_client = ReceiptGateClient(
@@ -93,7 +102,7 @@ async def test_replay_flushes_buffer_when_receiptgate_recovers(
         raise RuntimeError("receiptgate unavailable")
 
     monkeypatch.setattr(client, "_emit_to_receiptgate", _failing_emit)
-    await client.emit_receipt({"receipt_id": "r-003", "phase": "accepted"})
+    await client.emit_receipt({"receipt_id": "r-003", "phase": "complete"})
 
     async def _successful_emit(receipt_data):
         return {"status": "ok", "receipt_id": receipt_data["receipt_id"]}

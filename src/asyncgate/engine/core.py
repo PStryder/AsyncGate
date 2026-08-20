@@ -19,10 +19,12 @@ from asyncgate.db.repositories import (
 from asyncgate.engine.errors import (
     InvalidStateTransition,
     LeaseInvalidOrExpired,
+    ReceiptNotYetCommitted,
     TaskNotFound,
     UnauthorizedError,
 )
 from asyncgate.integrations import get_receiptgate_client
+from asyncgate.integrations.memorygate_client import ReceiptUnbufferable
 from asyncgate.models import (
     Principal,
     PrincipalKind,
@@ -1353,7 +1355,13 @@ class AsyncGateEngine:
                 task = await self.tasks.get(tenant_id, task_id) if task_id else None
                 receipt_payload = to_memorygate_receipt(receipt, task)
                 client = get_receiptgate_client()
-                await client.emit_receipt(receipt_payload)
+                outcome = await client.emit_receipt(receipt_payload)
+            except ReceiptUnbufferable:
+                # Acceptance is the mutual-exclusion point and cannot be decided
+                # locally. Deliberately allowed to propagate: it rolls back the
+                # enclosing savepoint, so no lease is granted and no local state
+                # claims a custody the ledger never conferred.
+                raise
             except Exception as exc:
                 # stdlib logger, so structured fields go through `extra`.
                 # Passing them as kwargs raised TypeError here, which then
@@ -1369,6 +1377,23 @@ class AsyncGateEngine:
                         "error": str(exc),
                     },
                 )
+            else:
+                if outcome.get("status") == "buffered":
+                    # The receipt is durably queued, so nothing is lost -- but a
+                    # buffered transition is not a committed one, and the
+                    # emitter must not advance its own state machine on it. A
+                    # worker whose `complete` is in the outbox has not
+                    # completed: it may not release custody, report closure, or
+                    # treat the obligation as discharged.
+                    #
+                    # Raising rolls back the enclosing savepoint, so the task
+                    # stays running and the lease stays held. The ledger decides
+                    # when this became true, and local state follows on replay.
+                    raise ReceiptNotYetCommitted(
+                        receipt_type=receipt_type.value,
+                        task_id=str(task_id) if task_id else None,
+                        buffer_id=str(outcome.get("buffer_id")),
+                    )
 
         return receipt
 

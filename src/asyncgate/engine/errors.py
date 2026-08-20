@@ -102,3 +102,26 @@ class LeaseLifetimeExceeded(AsyncGateError):
         self.lease_id = lease_id
         self.lifetime_seconds = lifetime_seconds
         self.max_lifetime = max_lifetime
+
+
+class ReceiptNotYetCommitted(AsyncGateError):
+    """The receipt is durably buffered but has not been committed by the ledger.
+
+    Raised so the caller's state changes roll back. A buffered transition is not
+    an authoritative one: the emitter must not advance its own state machine on
+    it, so a worker whose `complete` sits in the outbox has not completed and
+    may not release custody or report closure.
+
+    Nothing is lost -- the receipt is persisted and replayed -- but the moment
+    it becomes true is decided by the ledger, and operational state follows from
+    there rather than running ahead of it.
+    """
+
+    def __init__(self, receipt_type: str, task_id: str | None, buffer_id: str):
+        self.receipt_type = receipt_type
+        self.task_id = task_id
+        self.buffer_id = buffer_id
+        super().__init__(
+            f"{receipt_type} for task {task_id} is buffered (id={buffer_id}), "
+            f"not committed; local state must not advance"
+        )
